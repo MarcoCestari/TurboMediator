@@ -25,8 +25,8 @@ A high-performance, enterprise-grade Mediator library for .NET using Source Gene
 - 🚦 **Rate Limiting** — Per-user/tenant/IP throttling with multiple algorithms and bulkhead isolation
 - 🚩 **Feature Flags** — Declarative handler toggling with Microsoft.FeatureManagement integration
 - 🔄 **Saga Orchestration** — Multi-step workflows with automatic compensation on failure
-- � **State Machine** — Entity lifecycle management with guards, transitions, entry/exit actions, and mediator integration
-- �📦 **Batching** — Auto-batching of queries for optimized bulk execution
+- ⚙️ **State Machine** — Entity lifecycle management with guards, transitions, entry/exit actions, and mediator integration
+- 📦 **Batching** — Auto-batching of queries for optimized bulk execution
 - 🧪 **Testing** — FakeMediator, RecordingMediator, handler test base classes, and integration test fixtures
 - 🖥️ **CLI** — Handler coverage analysis, documentation generation, health checks, and benchmarking
 
