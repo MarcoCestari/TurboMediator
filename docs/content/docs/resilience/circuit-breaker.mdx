@@ -1,0 +1,115 @@
+---
+title: Circuit Breaker
+description: Prevent cascading failures with the circuit breaker pattern
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The circuit breaker monitors failures and temporarily stops sending requests to a failing service, giving it time to recover.
+
+## States
+
+```
+Closed ──(failures exceed threshold)──→ Open ──(after cooldown)──→ HalfOpen
+  ↑                                                                    │
+  └────────(success in half-open)──────────────────────────────────────┘
+                                                                       │
+                                      Open ←──(failure in half-open)───┘
+```
+
+| State | Behavior |
+|---|---|
+| **Closed** | Normal operation. Failures are counted. |
+| **Open** | All requests fail immediately with `CircuitBreakerOpenException`. |
+| **HalfOpen** | A limited number of test requests are allowed through. |
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithCircuitBreaker<CallPaymentGatewayCommand, PaymentResult>(options =>
+    {
+        options.FailureThreshold = 5;              // Open after 5 failures
+        options.OpenDuration = TimeSpan.FromSeconds(30); // Stay open for 30s
+        options.SuccessThreshold = 1;              // Close after 1 success in half-open
+    });
+});
+```
+
+## CircuitBreakerOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `FailureThreshold` | 5 | Number of failures before opening |
+| `OpenDuration` | 30 seconds | How long the circuit stays open |
+| `SuccessThreshold` | 1 | Successes needed in half-open to close |
+
+## Inspecting State
+
+The circuit breaker exposes static methods for inspection and control:
+
+```csharp
+// Get the current state
+var state = CircuitBreakerBehavior<MyCommand, MyResponse>.GetCircuitState<MyCommand>();
+// Returns: Closed, Open, or HalfOpen
+
+// Manually reset a circuit
+CircuitBreakerBehavior<MyCommand, MyResponse>.Reset<MyCommand>();
+
+// Reset all circuits
+CircuitBreakerBehavior<MyCommand, MyResponse>.ResetAll();
+```
+
+## Practical Example
+
+```csharp
+// Configuration
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithCircuitBreaker<ProcessPaymentCommand, PaymentResult>(opt =>
+    {
+        opt.FailureThreshold = 3;
+        opt.OpenDuration = TimeSpan.FromSeconds(60);
+    });
+});
+
+// Message
+public record ProcessPaymentCommand(
+    Guid OrderId,
+    decimal Amount,
+    string Currency
+) : ICommand<PaymentResult>;
+
+// Handler
+public class ProcessPaymentHandler
+    : ICommandHandler<ProcessPaymentCommand, PaymentResult>
+{
+    private readonly IPaymentGateway _gateway;
+
+    public ProcessPaymentHandler(IPaymentGateway gateway) => _gateway = gateway;
+
+    public async ValueTask<PaymentResult> Handle(
+        ProcessPaymentCommand command, CancellationToken ct)
+    {
+        return await _gateway.ChargeAsync(
+            command.OrderId, command.Amount, command.Currency, ct);
+    }
+}
+
+// Usage — after 3 failures, the circuit opens and
+// subsequent calls fail immediately without hitting the gateway
+try
+{
+    var result = await mediator.Send(new ProcessPaymentCommand(orderId, 99.99m, "USD"));
+}
+catch (CircuitBreakerOpenException)
+{
+    // Circuit is open — return a friendly error
+    return Results.StatusCode(503);
+}
+```
+
+<Callout type="warn">
+Circuit state is maintained in a static `ConcurrentDictionary` keyed by message type. This means the circuit is shared across all instances of the same message type within the same application process.
+</Callout>

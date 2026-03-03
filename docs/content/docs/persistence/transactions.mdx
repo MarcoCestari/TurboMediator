@@ -1,0 +1,124 @@
+---
+title: Transactions
+description: Automatic transaction management for handlers
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The transaction behavior wraps handler execution in a database transaction, with automatic commit on success and rollback on failure.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Persistence
+dotnet add package TurboMediator.Persistence.EF  # For EF Core
+```
+
+## Using the Attribute
+
+```csharp
+[Transactional]
+public record CreateOrderCommand(string Product, int Qty) : ICommand<Order>;
+
+[Transactional(
+    IsolationLevel = IsolationLevel.Serializable,
+    TimeoutSeconds = 60,
+    AutoSaveChanges = true
+)]
+public record TransferFundsCommand(
+    Guid FromAccount,
+    Guid ToAccount,
+    decimal Amount
+) : ICommand<TransferResult>;
+```
+
+### Attribute Properties
+
+| Property | Default | Description |
+|---|---|---|
+| `IsolationLevel` | `ReadCommitted` | Transaction isolation level |
+| `TimeoutSeconds` | 30 | Transaction timeout |
+| `AutoSaveChanges` | `true` | Auto-call SaveChanges on commit |
+
+## ITransactionManager
+
+```csharp
+public interface ITransactionManager
+{
+    bool HasActiveTransaction { get; }
+    ValueTask<ITransactionScope> BeginTransactionAsync(
+        IsolationLevel isolationLevel, CancellationToken ct);
+    ValueTask<TResult> ExecuteWithStrategyAsync<TResult>(
+        Func<CancellationToken, ValueTask<TResult>> operation, CancellationToken ct);
+    ValueTask SaveChangesAsync(CancellationToken ct);
+}
+```
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    // For specific message types
+    m.WithTransaction<IBaseCommand, object>(options =>
+    {
+        options.IsolationLevel = IsolationLevel.ReadCommitted;
+        options.AutoSaveChanges = true;
+        options.UseExecutionStrategy = true;
+        options.ThrowOnNestedTransaction = false;
+    });
+
+    // Or for all commands at once
+    m.WithTransactionForCommands();
+});
+```
+
+## TransactionOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `IsolationLevel` | `ReadCommitted` | Default isolation level |
+| `AutoSaveChanges` | `true` | Auto-save on commit |
+| `UseExecutionStrategy` | `true` | Use EF Core execution strategy (for retries) |
+| `ThrowOnNestedTransaction` | `false` | Throw if a transaction is already active |
+
+## Practical Example
+
+```csharp
+[Transactional]
+public record PlaceOrderCommand(
+    Guid CustomerId,
+    IReadOnlyList<OrderItem> Items
+) : ICommand<Order>;
+
+public class PlaceOrderHandler : ICommandHandler<PlaceOrderCommand, Order>
+{
+    private readonly AppDbContext _db;
+
+    public PlaceOrderHandler(AppDbContext db) => _db = db;
+
+    public async ValueTask<Order> Handle(PlaceOrderCommand command, CancellationToken ct)
+    {
+        var order = new Order
+        {
+            CustomerId = command.CustomerId,
+            Items = command.Items.Select(i => new OrderLineItem
+            {
+                ProductId = i.ProductId,
+                Quantity = i.Quantity,
+                Price = i.Price
+            }).ToList()
+        };
+
+        _db.Orders.Add(order);
+        // SaveChanges is called automatically by the transaction behavior
+        // If any exception occurs, the transaction is rolled back
+
+        return order;
+    }
+}
+```
+
+<Callout type="info">
+The transaction behavior detects nested transactions and reuses the existing transaction to avoid issues. Set `ThrowOnNestedTransaction = true` if you want strict transaction boundaries.
+</Callout>

@@ -1,0 +1,158 @@
+---
+title: Result Pattern
+description: Explicit error handling with Result types instead of exceptions
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The `TurboMediator.Result` package provides `Result<T>` and `Result<TValue, TError>` types for explicit error handling without relying on exceptions for control flow.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Result
+```
+
+```csharp
+using TurboMediator.Results;
+```
+
+## Result\<T\>
+
+A readonly struct that represents either a successful value or an error:
+
+```csharp
+public readonly struct Result<TValue>
+{
+    public bool IsSuccess { get; }
+    public bool IsFailure { get; }
+    public TValue Value { get; }     // throws if failure
+    public Exception Error { get; }  // throws if success
+}
+```
+
+## Creating Results
+
+```csharp
+// Success
+var success = Result.Success(42);
+var success2 = Result.Success(new User("Alice"));
+
+// Failure
+var failure = Result.Failure<int>(new InvalidOperationException("oops"));
+
+// From try-catch
+var result = Result.Try(() => int.Parse("abc")); // Failure with FormatException
+var asyncResult = await Result.TryAsync(() => httpClient.GetStringAsync(url));
+```
+
+## Implicit Conversions
+
+```csharp
+// Value → Success result
+Result<int> result = 42;
+
+// Exception → Failure result
+Result<int> error = new InvalidOperationException("error");
+```
+
+## Pattern Matching
+
+```csharp
+var result = await mediator.Send(new GetUserQuery(userId));
+
+// Match
+var message = result.Match(
+    onSuccess: user => $"Found {user.Name}",
+    onFailure: error => $"Error: {error.Message}"
+);
+
+// Map — transform the success value
+var nameResult = result.Map(user => user.Name);
+
+// Bind — chain operations
+var orderResult = result.Bind(user => GetOrdersForUser(user.Id));
+```
+
+## Accessing Values
+
+```csharp
+// Safe access with default
+var user = result.GetValueOrDefault(User.Guest);
+
+// Throw if failure
+var user = result.GetValueOrThrow(); // throws the stored exception if failure
+```
+
+## Result\<TValue, TError\>
+
+A typed error variant for domain-specific errors without using exceptions:
+
+```csharp
+public readonly struct Result<TValue, TError>
+{
+    public bool IsSuccess { get; }
+    public bool IsFailure { get; }
+    public TValue Value { get; }
+    public TError Error { get; }
+}
+```
+
+## Practical Example
+
+```csharp
+// Define domain errors
+public abstract record UserError
+{
+    public record NotFound(Guid Id) : UserError;
+    public record EmailTaken(string Email) : UserError;
+    public record ValidationFailed(string[] Errors) : UserError;
+}
+
+// Use Result<T, TError> in handler
+public record CreateUserCommand(string Name, string Email)
+    : ICommand<Result<User, UserError>>;
+
+public class CreateUserHandler
+    : ICommandHandler<CreateUserCommand, Result<User, UserError>>
+{
+    private readonly IUserRepository _repo;
+
+    public CreateUserHandler(IUserRepository repo) => _repo = repo;
+
+    public async ValueTask<Result<User, UserError>> Handle(
+        CreateUserCommand command, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(command.Name))
+            return new UserError.ValidationFailed(new[] { "Name is required" });
+
+        var existingUser = await _repo.FindByEmailAsync(command.Email, ct);
+        if (existingUser is not null)
+            return new UserError.EmailTaken(command.Email);
+
+        var user = new User(Guid.NewGuid(), command.Name, command.Email);
+        await _repo.AddAsync(user, ct);
+        return user; // implicit conversion to success
+    }
+}
+
+// Usage in API endpoint
+app.MapPost("/users", async (CreateUserCommand cmd, IMediator mediator) =>
+{
+    var result = await mediator.Send(cmd);
+
+    return result.Match(
+        onSuccess: user => Results.Created($"/users/{user.Id}", user),
+        onFailure: error => error switch
+        {
+            UserError.EmailTaken e => Results.Conflict($"Email {e.Email} is taken"),
+            UserError.ValidationFailed v => Results.BadRequest(v.Errors),
+            _ => Results.StatusCode(500)
+        }
+    );
+});
+```
+
+<Callout type="info">
+The Result pattern is especially useful in domain-driven design where you want to represent expected failures (validation errors, not found, business rule violations) without throwing exceptions.
+</Callout>

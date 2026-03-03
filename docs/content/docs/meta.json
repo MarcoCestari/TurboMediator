@@ -1,0 +1,18 @@
+{
+  "pages": [
+    "index",
+    "why",
+    "comparison",
+    "getting-started",
+    "core",
+    "pipeline",
+    "resilience",
+    "observability",
+    "enterprise",
+    "scheduling",
+    "persistence",
+    "patterns",
+    "integrations",
+    "tooling"
+  ]
+}

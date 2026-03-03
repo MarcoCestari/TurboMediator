@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Package Info -->
+    <PackageId>TurboMediator.FeatureFlags</PackageId>
+    <Description>Feature flag behavior for TurboMediator - conditionally enable/disable handlers</Description>
+    <PackageTags>mediator;feature-flags;feature-toggles;feature-management</PackageTags>
+
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

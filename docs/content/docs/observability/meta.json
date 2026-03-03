@@ -1,0 +1,6 @@
+{
+  "title": "Observability",
+  "icon": "Activity",
+  "defaultOpen": false,
+  "pages": ["telemetry", "metrics", "correlation-id", "structured-logging", "health-checks"]
+}

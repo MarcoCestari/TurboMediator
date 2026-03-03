@@ -1,0 +1,163 @@
+---
+title: Notifications
+description: Publishing notifications to multiple handlers with configurable dispatch strategies
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Notifications are messages that can be handled by **zero or more** handlers. They are ideal for decoupling side effects from the main business logic.
+
+## Defining Notifications
+
+```csharp
+public record UserRegisteredNotification(
+    Guid UserId,
+    string Email,
+    DateTime RegisteredAt
+) : INotification;
+```
+
+## Publishing Notifications
+
+Use `IPublisher` (or `IMediator`) to publish:
+
+```csharp
+await mediator.Publish(new UserRegisteredNotification(
+    user.Id,
+    user.Email,
+    DateTime.UtcNow
+));
+```
+
+## Notification Publishers
+
+TurboMediator provides five built-in strategies for dispatching notifications to handlers:
+
+### ForeachAwaitPublisher (Default)
+
+Invokes handlers **sequentially**, one at a time. If a handler throws, subsequent handlers are not invoked.
+
+```csharp
+builder.Services.AddTurboMediator(m => m.WithSequentialNotifications());
+```
+
+### TaskWhenAllPublisher
+
+Invokes all handlers **in parallel** using `Task.WhenAll`. All handlers run concurrently.
+
+```csharp
+builder.Services.AddTurboMediator(m => m.WithParallelNotifications());
+```
+
+### FireAndForgetPublisher
+
+Dispatches handlers via `Task.Run` — **non-blocking**. The publish call returns immediately.
+
+```csharp
+builder.Services.AddTurboMediator(m => m.WithFireAndForgetNotifications());
+```
+
+<Callout type="warn">
+Fire-and-forget notifications are not awaited. Exceptions in handlers will be lost unless you add your own error handling within the handlers.
+</Callout>
+
+### ContinueOnExceptionPublisher
+
+Invokes handlers **sequentially** but continues even if a handler throws. All exceptions are collected into an `AggregateException` thrown at the end.
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+    m.WithNotificationPublisher(ContinueOnExceptionPublisher.Instance));
+```
+
+### StopOnFirstExceptionPublisher
+
+Invokes handlers **sequentially** and stops immediately on the first exception.
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+    m.WithNotificationPublisher(StopOnFirstExceptionPublisher.Instance));
+```
+
+## Custom Notification Publisher
+
+Implement `INotificationPublisher` to create your own strategy:
+
+```csharp
+public class PriorityNotificationPublisher : INotificationPublisher
+{
+    public async ValueTask Publish<TNotification>(
+        IEnumerable<INotificationHandler<TNotification>> handlers,
+        TNotification notification,
+        CancellationToken cancellationToken)
+        where TNotification : INotification
+    {
+        // Custom dispatch logic
+        foreach (var handler in handlers)
+        {
+            await handler.Handle(notification, cancellationToken);
+        }
+    }
+}
+```
+
+## Missing Handler Behavior
+
+By default, publishing a notification with no registered handlers is a no-op. You can change this:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+    m.ThrowOnNoNotificationHandler());
+```
+
+## Practical Example
+
+```csharp
+// Define the notification
+public record PaymentProcessedNotification(
+    Guid OrderId,
+    decimal Amount,
+    string Currency
+) : INotification;
+
+// Handler 1: Send receipt
+public class SendReceiptHandler : INotificationHandler<PaymentProcessedNotification>
+{
+    private readonly IEmailService _email;
+
+    public SendReceiptHandler(IEmailService email) => _email = email;
+
+    public async ValueTask Handle(PaymentProcessedNotification n, CancellationToken ct)
+    {
+        await _email.SendReceiptAsync(n.OrderId, n.Amount, n.Currency);
+    }
+}
+
+// Handler 2: Update accounting
+public class UpdateAccountingHandler : INotificationHandler<PaymentProcessedNotification>
+{
+    private readonly IAccountingService _accounting;
+
+    public UpdateAccountingHandler(IAccountingService accounting) => _accounting = accounting;
+
+    public async ValueTask Handle(PaymentProcessedNotification n, CancellationToken ct)
+    {
+        await _accounting.RecordPaymentAsync(n.OrderId, n.Amount, n.Currency);
+    }
+}
+
+// Handler 3: Log for audit
+public class PaymentAuditHandler : INotificationHandler<PaymentProcessedNotification>
+{
+    private readonly ILogger<PaymentAuditHandler> _logger;
+
+    public PaymentAuditHandler(ILogger<PaymentAuditHandler> logger) => _logger = logger;
+
+    public ValueTask Handle(PaymentProcessedNotification n, CancellationToken ct)
+    {
+        _logger.LogInformation("Payment of {Amount} {Currency} processed for order {OrderId}",
+            n.Amount, n.Currency, n.OrderId);
+        return default;
+    }
+}
+```

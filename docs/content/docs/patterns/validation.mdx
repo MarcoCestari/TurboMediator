@@ -1,0 +1,49 @@
+---
+title: Built-in Validation
+description: Lightweight validation without FluentValidation dependency
+---
+
+The `TurboMediator.Validation` package provides a lightweight built-in validation system with an `AbstractValidator` and `RuleBuilder`, independent of FluentValidation.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Validation
+```
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithValidation<IMessage, object>();
+});
+```
+
+## Creating Validators
+
+```csharp
+public class CreateUserValidator : AbstractValidator<CreateUserCommand>
+{
+    public CreateUserValidator()
+    {
+        RuleFor(x => x.Name)
+            .NotEmpty()
+            .MaximumLength(100);
+
+        RuleFor(x => x.Email)
+            .NotEmpty()
+            .EmailAddress();
+    }
+}
+```
+
+Register validators in DI:
+
+```csharp
+builder.Services.AddTransient<IValidator<CreateUserCommand>, CreateUserValidator>();
+```
+
+## Difference from FluentValidation
+
+This built-in validator is a **lightweight alternative** for projects that don't want the FluentValidation dependency. For full-featured validation (complex rules, conditional validation, custom validators), use the `TurboMediator.FluentValidation` package instead.

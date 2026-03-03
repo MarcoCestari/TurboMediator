@@ -1,0 +1,6 @@
+{
+  "title": "Core",
+  "icon": "Layers",
+  "defaultOpen": false,
+  "pages": ["messages", "handlers", "notifications", "streaming", "mediator-context"]
+}

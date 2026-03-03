@@ -1,0 +1,89 @@
+name: Publish NuGet Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Package version (e.g. 1.0.0, 1.0.0-preview.1)"
+        required: true
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
+  NUGET_SOURCE: https://api.nuget.org/v3/index.json
+
+jobs:
+  publish:
+    name: Pack & Publish
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            # Strip the leading 'v' from the tag
+            echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Restore
+        run: dotnet restore TurboMediator.sln
+
+      - name: Build
+        run: dotnet build TurboMediator.sln --configuration Release --no-restore -p:Version=${{ steps.version.outputs.VERSION }}
+
+      - name: Test
+        run: dotnet test TurboMediator.sln --configuration Release --no-build --verbosity normal
+
+      - name: Pack
+        run: |
+          dotnet pack src/TurboMediator/TurboMediator.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Abstractions/TurboMediator.Abstractions.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.SourceGenerator/TurboMediator.SourceGenerator.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Batching/TurboMediator.Batching.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Caching/TurboMediator.Caching.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Caching.Redis/TurboMediator.Caching.Redis.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.DistributedLocking/TurboMediator.DistributedLocking.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.DistributedLocking.Redis/TurboMediator.DistributedLocking.Redis.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Enterprise/TurboMediator.Enterprise.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.FeatureFlags/TurboMediator.FeatureFlags.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.FeatureFlags.FeatureManagement/TurboMediator.FeatureFlags.FeatureManagement.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.FluentValidation/TurboMediator.FluentValidation.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Observability/TurboMediator.Observability.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Persistence/TurboMediator.Persistence.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Persistence.EF/TurboMediator.Persistence.EF.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.RateLimiting/TurboMediator.RateLimiting.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Resilience/TurboMediator.Resilience.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Result/TurboMediator.Result.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Saga/TurboMediator.Saga.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Saga.EntityFramework/TurboMediator.Saga.EntityFramework.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Scheduling/TurboMediator.Scheduling.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Scheduling.EntityFramework/TurboMediator.Scheduling.EntityFramework.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.StateMachine/TurboMediator.StateMachine.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.StateMachine.EntityFramework/TurboMediator.StateMachine.EntityFramework.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Testing/TurboMediator.Testing.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Validation/TurboMediator.Validation.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Cli/TurboMediator.Cli.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+
+      - name: Upload NuGet packages artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: nupkgs
+          path: ./nupkgs/*.nupkg
+          retention-days: 30
+
+      - name: Push to NuGet.org
+        run: dotnet nuget push ./nupkgs/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source ${{ env.NUGET_SOURCE }} --skip-duplicate

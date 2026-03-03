@@ -1,0 +1,83 @@
+---
+title: Hedging
+description: Send parallel requests to improve latency with hedging
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Hedging sends **multiple parallel requests** with staggered delays, using the first successful response and cancelling the rest. This technique reduces tail latency by racing requests against each other.
+
+## How It Works
+
+1. Sends the initial request
+2. After a configurable delay, sends another parallel request
+3. Repeats up to `MaxParallelAttempts`
+4. Returns the **first successful** response
+5. Cancels all remaining in-flight requests
+
+## Using the Attribute
+
+```csharp
+[Hedging(maxParallelAttempts: 3, DelayMs = 200)]
+public record GetPriceQuery(string Symbol) : IQuery<decimal>;
+```
+
+## Using Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithHedging<GetPriceQuery, decimal>(options =>
+    {
+        options.MaxParallelAttempts = 3;
+        options.Delay = TimeSpan.FromMilliseconds(200);
+        options.CancelPendingOnSuccess = true;
+    });
+});
+```
+
+## HedgingOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `MaxParallelAttempts` | 2 | Max parallel requests |
+| `Delay` | 100ms | Delay before launching next attempt |
+| `CancelPendingOnSuccess` | `true` | Cancel remaining on first success |
+
+## Practical Example
+
+```csharp
+// Race multiple attempts to get stock price
+[Hedging(maxParallelAttempts: 3, DelayMs = 150)]
+public record GetStockPriceQuery(string Symbol) : IQuery<StockPrice>;
+
+public class GetStockPriceHandler : IQueryHandler<GetStockPriceQuery, StockPrice>
+{
+    private readonly IStockApi _api;
+
+    public GetStockPriceHandler(IStockApi api) => _api = api;
+
+    public async ValueTask<StockPrice> Handle(
+        GetStockPriceQuery query, CancellationToken ct)
+    {
+        // If this takes too long, a parallel attempt will race it
+        return await _api.GetPriceAsync(query.Symbol, ct);
+    }
+}
+```
+
+<Callout type="warn">
+Hedging increases load on downstream services because it sends multiple parallel requests. Use it wisely for read operations that are idempotent. **Do not use hedging for write operations** that could cause duplicates.
+</Callout>
+
+## When to Use Hedging
+
+- **High-availability reads** — Reduce tail latency for time-sensitive queries
+- **Multi-region deployments** — Race requests to different regions
+- **Unreliable external APIs** — Hedge against slow responses
+
+## When NOT to Use
+
+- **Write operations** — Could cause unintended duplicates
+- **High-cost operations** — Each attempt consumes resources
+- **Rate-limited APIs** — Multiple attempts consume rate limit budget

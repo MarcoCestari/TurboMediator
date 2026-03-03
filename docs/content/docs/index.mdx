@@ -1,0 +1,59 @@
+---
+title: TurboMediator
+description: A high-performance Mediator library for .NET using Source Generators. Zero reflection, Native AOT compatible, and compile-time validated.
+icon: Home
+---
+
+import { Cards, Card } from 'fumadocs-ui/components/card';
+
+## What is TurboMediator?
+
+TurboMediator is a **high-performance implementation** of the Mediator pattern for .NET that uses **Roslyn Source Generators** to create compile-time optimized dispatch code. Unlike traditional mediator libraries that rely on reflection and runtime type resolution, TurboMediator generates all the routing code at build time.
+
+### Key Benefits
+
+- **Zero Reflection** — All handler dispatch is generated at compile time via `switch` expressions
+- **Native AOT Compatible** — No runtime code generation, fully compatible with Native AOT publishing
+- **Compile-Time Validation** — Missing handlers, duplicate handlers, and signature mismatches are caught as build errors
+- **ValueTask-Based** — Uses `ValueTask<T>` throughout for minimal allocation overhead
+- **CQRS Ready** — Built-in support for Commands, Queries, Requests, and Notifications
+- **Streaming** — First-class `IAsyncEnumerable<T>` support for streaming scenarios
+- **Modular** — 20+ optional packages for cross-cutting concerns
+
+## Package Overview
+
+| Package | Description |
+|---------|-------------|
+| `TurboMediator.Abstractions` | Core interfaces, message types, handlers, pipeline behaviors |
+| `TurboMediator.SourceGenerator` | Compile-time code generation (required) |
+| `TurboMediator.FluentValidation` | FluentValidation integration |
+| `TurboMediator.Resilience` | Retry, Circuit Breaker, Timeout, Fallback, Hedging |
+| `TurboMediator.Result` | Result pattern types for functional error handling |
+| `TurboMediator.Observability` | Telemetry, Metrics, Correlation, Structured Logging, Health Checks |
+| `TurboMediator.Caching` | Response caching with attribute-based configuration |
+| `TurboMediator.Caching.Redis` | Redis distributed cache provider for TurboMediator.Caching |
+| `TurboMediator.Validation` | Built-in lightweight validation (no FluentValidation dependency) |
+| `TurboMediator.Enterprise` | Authorization, Multi-Tenancy, Deduplication |
+| `TurboMediator.Scheduling` | Cron jobs and recurring job scheduling |
+| `TurboMediator.Scheduling.EntityFramework` | EF Core job store for Scheduling |
+| `TurboMediator.RateLimiting` | Rate Limiting & Bulkhead Isolation |
+| `TurboMediator.Persistence` | Transactions, Outbox, Audit |
+| `TurboMediator.Persistence.EF` | Entity Framework Core implementations |
+| `TurboMediator.Saga` | Saga orchestration pattern |
+| `TurboMediator.Saga.EntityFramework` | EF Core saga store |
+| `TurboMediator.StateMachine` | State machine pattern with guards, transitions, and mediator integration |
+| `TurboMediator.StateMachine.EntityFramework` | EF Core transition store for state machine auditing |
+| `TurboMediator.Batching` | Batch processing for queries |
+| `TurboMediator.FeatureFlags` | Feature flag behavior |
+| `TurboMediator.FeatureFlags.FeatureManagement` | Microsoft.FeatureManagement integration |
+| `TurboMediator.Testing` | Test utilities, fakes, and helpers |
+| `TurboMediator.Cli` | CLI tool for analysis and docs generation |
+
+## Next Steps
+
+<Cards>
+  <Card title="Installation" href="/docs/getting-started/installation" />
+  <Card title="Quick Start" href="/docs/getting-started/quick-start" />
+  <Card title="Messages & Handlers" href="/docs/core/messages" />
+  <Card title="Pipeline Behaviors" href="/docs/pipeline/behaviors" />
+</Cards>

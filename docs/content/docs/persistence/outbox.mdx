@@ -1,0 +1,269 @@
+---
+title: Outbox Pattern
+description: Reliable message delivery with the transactional outbox pattern
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The outbox pattern ensures reliable notification delivery by storing notifications in the database within the same transaction as your business data, then processing them asynchronously.
+
+## How It Works
+
+1. When a notification is published, it's serialized and stored in the outbox table (within the current transaction)
+2. The transaction commits atomically — both business data and outbox messages
+3. A background processor picks up pending outbox messages and publishes them
+
+This ensures **at-least-once delivery** — notifications are never lost even if the application crashes after the transaction commits.
+
+## IOutboxStore
+
+```csharp
+public interface IOutboxStore
+{
+    ValueTask SaveAsync(OutboxMessage message, CancellationToken ct);
+    IAsyncEnumerable<OutboxMessage> GetPendingAsync(int batchSize, CancellationToken ct);
+    ValueTask MarkAsProcessingAsync(Guid messageId, CancellationToken ct);
+    ValueTask<bool> TryClaimAsync(Guid messageId, string workerId, CancellationToken ct);
+    ValueTask MarkAsProcessedAsync(Guid messageId, CancellationToken ct);
+    ValueTask IncrementRetryAsync(Guid messageId, string error, CancellationToken ct);
+    ValueTask MoveToDeadLetterAsync(Guid messageId, string reason, CancellationToken ct);
+    ValueTask<int> CleanupAsync(TimeSpan olderThan, CancellationToken ct);
+}
+```
+
+## OutboxMessage
+
+```csharp
+public class OutboxMessage
+{
+    public Guid Id { get; set; }
+    public string MessageType { get; set; }     // Full type name
+    public string Payload { get; set; }          // JSON serialized
+    public string? CorrelationId { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public DateTime? ProcessedAt { get; set; }
+    public int RetryCount { get; set; }
+    public int MaxRetries { get; set; }          // Per-message retry limit
+    public string? Error { get; set; }
+    public OutboxMessageStatus Status { get; set; }
+    public string? ClaimedBy { get; set; }       // Worker that claimed this message
+    public Dictionary<string, string>? Headers { get; set; }
+}
+
+public enum OutboxMessageStatus
+{
+    Pending = 0,       // Awaiting processing (includes messages pending retry)
+    Processing = 1,
+    Processed = 2,
+    DeadLettered = 3   // Exceeded max retries, moved to dead letter
+}
+```
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithOutbox(options =>
+    {
+        options.PublishImmediately = false;
+        options.MaxRetries = 5;
+        options.CorrelationIdGenerator = () => Guid.NewGuid().ToString();
+    });
+});
+```
+
+## Using the Attribute
+
+Mark notifications for outbox delivery:
+
+```csharp
+[WithOutbox]
+public record OrderCreatedNotification(Guid OrderId) : INotification;
+
+// With custom retry settings
+[WithOutbox(MaxRetries = 10, PublishImmediately = true)]
+public record CriticalNotification(string Data) : INotification;
+```
+
+<Callout type="info">
+When `PublishImmediately = true`, the notification is saved to the outbox **and** published to the broker inline (if one is registered). On failure, the retry count is incremented and the message stays `Pending` so the background processor can pick it up.
+</Callout>
+
+## Practical Example
+
+```csharp
+[Transactional]
+public record PlaceOrderCommand(Guid CustomerId, List<OrderItem> Items)
+    : ICommand<Order>;
+
+public class PlaceOrderHandler : ICommandHandler<PlaceOrderCommand, Order>
+{
+    private readonly AppDbContext _db;
+    private readonly IMediator _mediator;
+
+    public PlaceOrderHandler(AppDbContext db, IMediator mediator)
+    {
+        _db = db;
+        _mediator = mediator;
+    }
+
+    public async ValueTask<Order> Handle(PlaceOrderCommand command, CancellationToken ct)
+    {
+        var order = new Order { CustomerId = command.CustomerId, /* ... */ };
+        _db.Orders.Add(order);
+
+        // This notification is stored in the outbox, not published immediately
+        // It will be published after the transaction commits
+        await _mediator.Publish(new OrderCreatedNotification(order.Id), ct);
+
+        return order;
+    }
+}
+```
+
+<Callout type="warn">
+The outbox pattern provides **at-least-once delivery**. Your notification handlers must be **idempotent** — designed to handle the same notification being delivered more than once. See the [Inbox Pattern](/docs/persistence/inbox) for built-in deduplication on the consumer side.
+</Callout>
+
+## Dead Letter Queue (DLQ)
+
+Messages that exceed their maximum retry attempts are moved to a **dead letter** status instead of being retried indefinitely. This prevents poison messages from blocking the outbox.
+
+### How It Works
+
+1. `OutboxProcessor` picks up a pending message with high retry count
+2. If `RetryCount >= MaxRetries`, the message is dead-lettered
+3. If an `IOutboxDeadLetterHandler` is registered, it's called first (for alerts, DLQ publishing, etc.)
+4. The message status changes to `DeadLettered` — even if the handler throws an exception
+
+### IOutboxDeadLetterHandler
+
+```csharp
+public interface IOutboxDeadLetterHandler
+{
+    ValueTask HandleAsync(OutboxMessage message, string reason, CancellationToken ct);
+}
+```
+
+### Example: Alerting on Dead Letters
+
+```csharp
+public class AlertingDeadLetterHandler : IOutboxDeadLetterHandler
+{
+    private readonly ILogger<AlertingDeadLetterHandler> _logger;
+    private readonly IAlertService _alertService;
+
+    public AlertingDeadLetterHandler(
+        ILogger<AlertingDeadLetterHandler> logger,
+        IAlertService alertService)
+    {
+        _logger = logger;
+        _alertService = alertService;
+    }
+
+    public async ValueTask HandleAsync(
+        OutboxMessage message, string reason, CancellationToken ct)
+    {
+        _logger.LogCritical(
+            "Message {MessageId} of type {Type} dead-lettered: {Reason}",
+            message.Id, message.MessageType, reason);
+
+        await _alertService.SendAsync(
+            $"Outbox DLQ: {message.MessageType}",
+            $"Message {message.Id} failed after {message.RetryCount} retries. Error: {message.Error}",
+            ct);
+    }
+}
+```
+
+### Registration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithOutbox(outbox =>
+    {
+        outbox.AddProcessor()
+              .WithMaxRetries(5)
+              .WithDeadLetterHandler<AlertingDeadLetterHandler>();
+    });
+});
+
+// Or standalone
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithDeadLetterHandler<AlertingDeadLetterHandler>();
+});
+```
+
+<Callout type="info">
+The dead letter handler is **optional**. Even without one, messages will still be moved to `DeadLettered` status and stop being retried. The handler allows you to take additional action (alerting, external DLQ, compensation). If the handler throws, the message is still moved to `DeadLettered` — the error is logged and appended to the reason.
+</Callout>
+
+## Multi-Worker Concurrency
+
+The outbox processor supports running **multiple worker instances** safely — whether in the same process, multiple pods, or separate services.
+
+### How It Works
+
+The processor uses **optimistic concurrency** via `TryClaimAsync`. When a worker picks up a batch of candidates:
+
+1. `GetPendingAsync` returns candidate messages (a simple SELECT)
+2. For each candidate, the worker calls `TryClaimAsync(messageId, workerId)`
+3. `TryClaimAsync` performs an atomic `UPDATE ... WHERE Status = 'Pending' AND Id = @id`
+4. If `rowsAffected == 1`, this worker won the claim and processes the message
+5. If `rowsAffected == 0`, another worker already claimed it — skip
+
+This is safe for **any database** (PostgreSQL, SQL Server, MySQL, SQLite) because a single-row UPDATE is atomic at the database level.
+
+### Configuration
+
+Each worker gets an auto-generated ID by default, or you can assign one explicitly:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithOutbox(outbox =>
+    {
+        outbox.AddProcessor()
+              .WithProcessingInterval(TimeSpan.FromSeconds(1))
+              .WithBatchSize(50)
+              .WithMaxRetries(5)
+              .WithAutoCleanup(cleanupAge: TimeSpan.FromDays(30));
+    });
+});
+
+// Or configure the processor options directly
+builder.Services.AddOutboxProcessor(options =>
+{
+    options.WorkerId = "worker-pod-1";       // Explicit worker ID
+    options.ProcessingInterval = TimeSpan.FromSeconds(1);
+    options.BatchSize = 100;
+});
+```
+
+### Custom Store Implementation
+
+If you implement `IOutboxStore` for a custom database, the `TryClaimAsync` implementation must be atomic:
+
+```csharp
+public async ValueTask<bool> TryClaimAsync(
+    Guid messageId, string workerId, CancellationToken ct)
+{
+    // The key: UPDATE with WHERE ensures only one worker wins
+    var sql = """
+        UPDATE outbox_messages
+        SET status = 'Processing', claimed_by = @workerId
+        WHERE id = @messageId
+          AND status = 'Pending'
+        """;
+
+    var rowsAffected = await db.ExecuteAsync(sql, new { messageId, workerId }, ct);
+    return rowsAffected > 0;
+}
+```
+
+<Callout type="info">
+The `ClaimedBy` column is useful for debugging: you can see which worker processed each message. It's optional for the concurrency mechanism itself — the `Status` column is what prevents duplicates.
+</Callout>

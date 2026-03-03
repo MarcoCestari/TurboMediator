@@ -1,0 +1,6 @@
+{
+  "title": "Enterprise",
+  "icon": "Building2",
+  "defaultOpen": false,
+  "pages": ["authorization", "multi-tenancy", "deduplication"]
+}

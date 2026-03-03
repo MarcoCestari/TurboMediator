@@ -1,0 +1,164 @@
+---
+title: Job Chaining vs Saga
+description: Understanding when to use scheduling chains vs saga orchestration
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+TurboMediator provides two powerful coordination mechanisms that may seem similar at first glance but serve fundamentally different purposes:
+
+| Aspect | Scheduling | Saga |
+|--------|-----------|------|
+| **Purpose** | *When* to run | *What* to run after what |
+| **Trigger** | Time-based (cron/interval) | Event-based (previous step completes) |
+| **State** | Stateless between runs | Stateful with persistent context |
+| **Compensation** | No rollback | Built-in compensation/rollback |
+| **Scope** | Background tasks | Business workflows |
+| **Concurrency** | SkipIfAlreadyRunning | Step-level idempotency |
+
+## Scheduling: Temporal Triggers
+
+The scheduling system answers: **"When should this task run?"**
+
+```csharp
+// Run cleanup every night at 3 AM
+scheduling.AddRecurringJob<CleanupCommand>("nightly-cleanup")
+    .WithCron("0 3 * * *")
+    .WithRetry(RetryStrategy.Fixed(3, 60))
+    .WithData(() => new CleanupCommand());
+
+// Sync external data every 5 minutes
+scheduling.AddRecurringJob<SyncCommand>("data-sync")
+    .Every(TimeSpan.FromMinutes(5))
+    .SkipIfAlreadyRunning()
+    .WithData(() => new SyncCommand());
+```
+
+Characteristics:
+- Each execution is **independent** — no shared state between runs
+- Retry is about recovering from transient errors in the *same* task
+- No concept of "if step A succeeds, do step B"
+- No compensation or rollback
+
+## Saga: Workflow Orchestration
+
+The saga system answers: **"What should happen next, and what if it fails?"**
+
+```csharp
+public class OrderSaga : Saga<OrderSagaData>
+{
+    public override void Configure(ISagaBuilder<OrderSagaData> builder)
+    {
+        builder
+            .Start<CreateOrderCommand>()
+            .Then<ReserveInventoryCommand>()
+                .WithCompensation<ReleaseInventoryCommand>()
+            .Then<ProcessPaymentCommand>()
+                .WithCompensation<RefundPaymentCommand>()
+            .Then<SendConfirmationCommand>();
+    }
+}
+```
+
+Characteristics:
+- Steps are **causally linked** — each depends on the previous
+- **Persistent state** flows through the entire workflow
+- **Compensation** automatically rolls back on failure
+- Triggered by an event, not a clock
+
+## Why Not Job Chaining in Scheduling?
+
+Early design considered adding Job Chaining to the scheduling module:
+
+```
+Job A → (OnSuccess) → Job B → (OnFailure) → Job C
+```
+
+We decided **against** this because:
+
+1. **Overlap with Saga**: Chaining jobs based on success/failure is workflow orchestration — exactly what Sagas do with better primitives (state, compensation, retries per step).
+
+2. **No shared state**: Chained scheduled jobs would have no way to pass data between steps without inventing a state mechanism — which is just reinventing Sagas.
+
+3. **No compensation**: If Job B fails after Job A succeeds, there's no built-in way to undo Job A's effects.
+
+4. **Simpler model**: Keeping scheduling focused on temporal concerns makes it easier to reason about and test.
+
+<Callout type="info">
+The `RunCondition` enum and `ParentOccurrenceId` field exist in the data model as reserved fields. They are not used by the processor today but allow potential future extensions without schema changes.
+</Callout>
+
+## When to Use What
+
+### Use Scheduling when:
+
+- You need to run a task on a **time-based** schedule (cron, interval)
+- Each execution is **independent** and stateless
+- Retry is needed for transient failures only
+- Examples: cleanup, health checks, data sync, report generation, cache warming
+
+### Use Saga when:
+
+- You have a **multi-step business workflow**
+- Steps must execute in order with **data flowing** between them
+- You need **compensation** if a step fails
+- The workflow is triggered by a **business event**, not a clock
+- Examples: order processing, payment flows, user onboarding, provisioning
+
+### Combine Both:
+
+The most powerful pattern is **combining scheduling with sagas**:
+
+```csharp
+// Handler triggered by scheduler
+public class BatchProcessHandler : ICommandHandler<BatchProcessCommand, Unit>
+{
+    private readonly ISender _sender;
+
+    public BatchProcessHandler(ISender sender) => _sender = sender;
+
+    public async ValueTask<Unit> Handle(BatchProcessCommand cmd, CancellationToken ct)
+    {
+        var pendingOrders = await GetPendingOrders();
+
+        foreach (var order in pendingOrders)
+        {
+            // Start a saga for each pending order
+            await _sender.Send(new StartOrderSagaCommand(order.Id), ct);
+        }
+
+        return Unit.Value;
+    }
+}
+
+// Registration
+scheduling.AddRecurringJob<BatchProcessCommand>("process-pending-orders")
+    .WithCron("0 */30 * * *")  // every 30 minutes
+    .WithData(() => new BatchProcessCommand());
+```
+
+In this pattern:
+- **Scheduling** handles the *when* (every 30 minutes)
+- **Saga** handles the *how* (multi-step order processing with compensation)
+
+## Summary
+
+```
+┌──────────────────────────────────────────┐
+│         TurboMediator Coordination       │
+├────────────────────┬─────────────────────┤
+│     Scheduling     │        Saga         │
+├────────────────────┼─────────────────────┤
+│ Cron / Interval    │ Event-triggered     │
+│ Stateless          │ Stateful            │
+│ Retry (transient)  │ Compensation        │
+│ Independent runs   │ Linked steps        │
+│ "Run X at Y time"  │ "After A, do B"     │
+└────────────────────┴─────────────────────┘
+```
+
+<Callout type="info">
+Think of it this way: **Scheduling is a clock. Saga is a recipe.** The clock tells you when to start cooking; the recipe tells you each step and what to do if you burn the sauce.
+</Callout>

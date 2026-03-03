@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Package Info -->
+    <PackageId>TurboMediator.Validation</PackageId>
+    <Description>Built-in lightweight validation for TurboMediator - AbstractValidator, RuleBuilder, and ValidationBehavior without external dependencies</Description>
+    <PackageTags>mediator;validation;pipeline;validator</PackageTags>
+
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

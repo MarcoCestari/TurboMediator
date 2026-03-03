@@ -1,0 +1,68 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <LangVersion>12.0</LangVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Caching.StackExchangeRedis" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="8.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="8.0.0" />
+    <PackageReference Include="StackExchange.Redis" Version="2.7.10" />
+    <PackageReference Include="Testcontainers.PostgreSql" Version="4.3.0" />
+    <PackageReference Include="Testcontainers.Redis" Version="4.3.0" />
+    <PackageReference Include="xunit" Version="2.7.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="coverlet.collector" Version="6.0.1">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FluentAssertions" Version="6.12.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+    <PackageReference Include="Moq" Version="4.20.70" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Result\TurboMediator.Result.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Resilience\TurboMediator.Resilience.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Observability\TurboMediator.Observability.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Caching\TurboMediator.Caching.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Caching.Redis\TurboMediator.Caching.Redis.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Validation\TurboMediator.Validation.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Enterprise\TurboMediator.Enterprise.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.FluentValidation\TurboMediator.FluentValidation.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Persistence.EF\TurboMediator.Persistence.EF.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.RateLimiting\TurboMediator.RateLimiting.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Saga\TurboMediator.Saga.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.FeatureFlags\TurboMediator.FeatureFlags.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.FeatureFlags.FeatureManagement\TurboMediator.FeatureFlags.FeatureManagement.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Batching\TurboMediator.Batching.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Saga.EntityFramework\TurboMediator.Saga.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.StateMachine\TurboMediator.StateMachine.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.StateMachine.EntityFramework\TurboMediator.StateMachine.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Testing\TurboMediator.Testing.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Cli\TurboMediator.Cli.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Scheduling\TurboMediator.Scheduling.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Scheduling.EntityFramework\TurboMediator.Scheduling.EntityFramework.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.DistributedLocking\TurboMediator.DistributedLocking.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.DistributedLocking.Redis\TurboMediator.DistributedLocking.Redis.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.SourceGenerator\TurboMediator.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="8.0.0" />
+    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
+  </ItemGroup>
+
+</Project>

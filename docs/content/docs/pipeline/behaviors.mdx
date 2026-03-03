@@ -1,0 +1,251 @@
+---
+title: Pipeline Behaviors
+description: Adding cross-cutting concerns with IPipelineBehavior
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Pipeline behaviors wrap the handler execution and enable cross-cutting concerns such as logging, validation, caching, retry, and more. They form a **chain of responsibility** around your handler.
+
+## How the Pipeline Works
+
+```
+Request → PreProcessor → Behavior[N] → ... → Behavior[1] → Handler → PostProcessor
+                                                              ↑
+                                                    ExceptionHandler (on error)
+```
+
+Each behavior receives the message and a `next` delegate. Calling `next` invokes the next behavior in the chain (or the handler itself if it's the innermost behavior).
+
+## IPipelineBehavior
+
+```csharp
+public interface IPipelineBehavior<TMessage, TResponse>
+    where TMessage : IMessage
+{
+    ValueTask<TResponse> Handle(
+        TMessage message,
+        MessageHandlerDelegate<TResponse> next,
+        CancellationToken cancellationToken);
+}
+```
+
+## Creating a Behavior
+
+### Logging Behavior
+
+```csharp
+public class LoggingBehavior<TMessage, TResponse>
+    : IPipelineBehavior<TMessage, TResponse>
+    where TMessage : IMessage
+{
+    private readonly ILogger<LoggingBehavior<TMessage, TResponse>> _logger;
+
+    public LoggingBehavior(ILogger<LoggingBehavior<TMessage, TResponse>> logger)
+    {
+        _logger = logger;
+    }
+
+    public async ValueTask<TResponse> Handle(
+        TMessage message,
+        MessageHandlerDelegate<TResponse> next,
+        CancellationToken ct)
+    {
+        var messageType = typeof(TMessage).Name;
+        _logger.LogInformation("Handling {MessageType}: {@Message}", messageType, message);
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            var response = await next();
+            stopwatch.Stop();
+
+            _logger.LogInformation(
+                "Handled {MessageType} in {ElapsedMs}ms",
+                messageType, stopwatch.ElapsedMilliseconds);
+
+            return response;
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex,
+                "Error handling {MessageType} after {ElapsedMs}ms",
+                messageType, stopwatch.ElapsedMilliseconds);
+            throw;
+        }
+    }
+}
+```
+
+### Performance Behavior
+
+```csharp
+public class PerformanceBehavior<TMessage, TResponse>
+    : IPipelineBehavior<TMessage, TResponse>
+    where TMessage : IMessage
+{
+    private readonly ILogger<PerformanceBehavior<TMessage, TResponse>> _logger;
+    private const int SlowThresholdMs = 500;
+
+    public PerformanceBehavior(ILogger<PerformanceBehavior<TMessage, TResponse>> logger)
+    {
+        _logger = logger;
+    }
+
+    public async ValueTask<TResponse> Handle(
+        TMessage message,
+        MessageHandlerDelegate<TResponse> next,
+        CancellationToken ct)
+    {
+        var sw = Stopwatch.StartNew();
+        var response = await next();
+        sw.Stop();
+
+        if (sw.ElapsedMilliseconds > SlowThresholdMs)
+        {
+            _logger.LogWarning(
+                "Slow handler detected: {MessageType} took {ElapsedMs}ms",
+                typeof(TMessage).Name, sw.ElapsedMilliseconds);
+        }
+
+        return response;
+    }
+}
+```
+
+## Registering Behaviors
+
+Register behaviors using the `TurboMediatorBuilder`:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    // Register for specific message types
+    m.WithPipelineBehavior<LoggingBehavior<PingRequest, string>>();
+    m.WithPipelineBehavior<PerformanceBehavior<CreateUserCommand, User>>();
+});
+```
+
+## Compile-Time Attribute Registration
+
+Instead of manually registering a behavior for every message type, you can use `ConfigureFromAttributes()` to let the **source generator** detect your attribute annotations at compile time and emit the DI registrations automatically — with no `Assembly.GetTypes()`, `MakeGenericType`, or reflection at runtime.
+
+### Supported attributes
+
+| Attribute | Behavior registered |
+|---|---|
+| `[RequiresTenant]` | `TenantBehavior<TMessage, TResponse>` |
+| `[Authorize]` | `AuthorizationBehavior<TMessage, TResponse>` |
+| `[Transactional]` | `TransactionBehavior<TMessage, TResponse>` |
+| `[Auditable]` | `AuditBehavior<TMessage, TResponse>` |
+
+### Usage
+
+Decorate your messages:
+
+```csharp
+[RequiresTenant]
+[Authorize("CanManageProjects")]
+[Transactional]
+[Auditable(IncludeRequest = true)]
+public record CreateProjectCommand(string Name, string Description)
+    : ICommand<ProjectDto>;
+```
+
+Then call `ConfigureFromAttributes()` once in your registration:
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    .ConfigureFromAttributes()
+    .WithAuthorizationPolicies(policies =>
+    {
+        policies.AddPolicy("CanManageProjects", u => u.IsInRole("Manager"));
+    }));
+```
+
+The source generator scans all discovered message types at **compile time** (as part of generating the `Mediator` class) and emits a static `ConfigureFromAttributes()` extension method on `TurboMediatorBuilder` that registers only the behaviors needed by each attributed message. The generated method looks like:
+
+```csharp
+// Generated inside TurboMediator.g.cs
+public static TurboMediatorBuilder ConfigureFromAttributes(this TurboMediatorBuilder builder)
+{
+    // [RequiresTenant] on CreateProjectCommand
+    TurboMediator.Enterprise.TurboMediatorBuilderExtensions
+        .WithMultiTenancy<CreateProjectCommand, ProjectDto>(builder);
+
+    // [Authorize] on CreateProjectCommand
+    TurboMediator.Enterprise.TurboMediatorBuilderExtensions
+        .WithAuthorization<CreateProjectCommand, ProjectDto>(builder);
+
+    // [Transactional] on CreateProjectCommand
+    TurboMediator.Persistence.TurboMediatorBuilderExtensions
+        .WithTransaction<CreateProjectCommand, ProjectDto>(builder);
+
+    // [Auditable] on CreateProjectCommand
+    TurboMediator.Persistence.TurboMediatorBuilderExtensions
+        .WithAudit<CreateProjectCommand, ProjectDto>(builder);
+
+    return builder;
+}
+```
+
+<Callout type="info">
+`ConfigureFromAttributes()` is the recommended way to apply attribute-based behaviors. It is fully equivalent to calling each `WithMultiTenancy<T>()`, `WithAuthorization<T>()`, `WithTransaction<T>()`, and `WithAudit<T>()` manually — just without the boilerplate.
+</Callout>
+
+## Pipeline Execution Order
+
+Behaviors are executed in **registration order** (outermost to innermost). A typical pipeline might look like:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    // 1. Correlation ID (outermost)
+    m.WithCorrelationId<IMessage, object>();
+    // 2. Structured Logging
+    m.WithStructuredLogging<IMessage, object>();
+    // 3. Telemetry
+    m.WithTelemetry<IMessage, object>();
+    // 4. Authorization
+    m.WithAuthorization<IMessage, object>();
+    // 5. Validation
+    m.WithFluentValidation();
+    // 6. Caching
+    m.WithCaching<IQuery<object>, object>();
+    // 7. Rate Limiting
+    m.WithRateLimiting<IMessage, object>();
+    // 8. Transaction
+    m.WithTransaction<ICommand<object>, object>();
+    // 9. Retry (innermost)
+    m.WithRetry<IMessage, object>();
+});
+```
+
+<Callout type="info">
+The outermost behavior wraps all others. For example, the logging behavior should be registered first so it captures the total execution time including all other behaviors.
+</Callout>
+
+## Constrained Behaviors
+
+You can constrain behaviors to specific message types using generic constraints:
+
+```csharp
+// Only applies to commands
+public class CommandAuditBehavior<TCommand, TResponse>
+    : IPipelineBehavior<TCommand, TResponse>
+    where TCommand : IBaseCommand
+{
+    public async ValueTask<TResponse> Handle(
+        TCommand message,
+        MessageHandlerDelegate<TResponse> next,
+        CancellationToken ct)
+    {
+        // Only runs for ICommand messages
+        var response = await next();
+        // Audit the command...
+        return response;
+    }
+}
+```

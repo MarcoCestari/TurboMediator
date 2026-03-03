@@ -1,0 +1,50 @@
+---
+title: Health Checks
+description: Monitor mediator health with ASP.NET Core health checks
+---
+
+TurboMediator integrates with ASP.NET Core health checks to monitor the health of the mediator system.
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithHealthCheck(options =>
+    {
+        options.Tags = new[] { "ready" };
+        options.CheckHandlerRegistration = true;
+        options.CheckCircuitBreakers = true;
+        options.CheckSagaStore = true;
+        options.CheckOutboxBacklog = true;
+        options.MaxOutboxBacklog = 1000;
+        options.Timeout = TimeSpan.FromSeconds(5);
+    });
+});
+
+// Map health endpoint
+app.MapHealthChecks("/health");
+```
+
+## TurboMediatorHealthCheckOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `CheckHandlerRegistration` | `true` | Verify all message types have registered handlers |
+| `CheckCircuitBreakers` | `true` | Report unhealthy if any circuit breaker is open |
+| `CheckSagaStore` | `true` | Check saga store connectivity |
+| `CheckOutboxBacklog` | `true` | Check outbox backlog size |
+| `MaxOutboxBacklog` | `1000` | Maximum outbox backlog before reporting degraded |
+| `DegradedThreshold` | `0.8` | Percentage of MaxOutboxBacklog before degraded |
+| `Timeout` | `5s` | Timeout for health check operations |
+| `Tags` | `["turbomediator", "ready"]` | Tags for filtering health checks |
+| `IncludeDetails` | `true` | Include detailed information in response |
+
+## Health Check Result
+
+The health check verifies:
+- Mediator is registered and can be resolved from DI
+- Handler resolution works correctly
+- Pipeline is configured properly
+
+Returns `Healthy`, `Degraded`, or `Unhealthy` based on the check results.

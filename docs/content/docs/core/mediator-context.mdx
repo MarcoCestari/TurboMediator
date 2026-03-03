@@ -1,0 +1,164 @@
+---
+title: Mediator Context
+description: Flowing contextual data through the pipeline with IMediatorContext
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+`IMediatorContext` provides a way to flow **contextual data** through the entire pipeline — from pre-processors, through behaviors, to the handler and post-processors.
+
+## IMediatorContext Interface
+
+```csharp
+public interface IMediatorContext
+{
+    string CorrelationId { get; set; }
+    string? CausationId { get; set; }
+    string? UserId { get; set; }
+    string? TenantId { get; set; }
+    string? TraceId { get; set; }
+    string? SpanId { get; set; }
+
+    IDictionary<string, object?> Items { get; }
+
+    // Keyed access
+    void Set<T>(string key, T value);
+    T? Get<T>(string key);
+    bool TryGet<T>(string key, out T? value);
+
+    // Type-based access (uses type name as key)
+    void Set<T>(T value);
+    T? Get<T>();
+    bool TryGet<T>(out T? value);
+}
+```
+
+## Built-in Properties
+
+| Property | Description |
+|---|---|
+| `CorrelationId` | Unique ID that groups related operations together |
+| `CausationId` | ID of the message that caused this message |
+| `UserId` | ID of the current user |
+| `TenantId` | ID of the current tenant (multi-tenancy) |
+| `TraceId` | Distributed tracing trace ID |
+| `SpanId` | Distributed tracing span ID |
+
+## Using the Context
+
+### Setting up
+
+Register the mediator context with `WithMediatorContext()`:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithMediatorContext();
+});
+```
+
+### Accessing in handlers
+
+Inject `IMediatorContextAccessor` to access the current context:
+
+```csharp
+public class CreateOrderHandler : ICommandHandler<CreateOrderCommand, Order>
+{
+    private readonly IMediatorContextAccessor _contextAccessor;
+
+    public CreateOrderHandler(IMediatorContextAccessor contextAccessor)
+    {
+        _contextAccessor = contextAccessor;
+    }
+
+    public async ValueTask<Order> Handle(CreateOrderCommand command, CancellationToken ct)
+    {
+        var context = _contextAccessor.Context;
+        var userId = context?.UserId;
+        var correlationId = context?.CorrelationId;
+
+        // Use context data...
+        return new Order { CreatedBy = userId };
+    }
+}
+```
+
+### Storing custom data
+
+Use `Set<T>(value)` and `Get<T>()` for type-based access (uses the type name as the key), or `Set<T>(key, value)` and `Get<T>(key)` for explicit keys:
+
+```csharp
+// Type-based access — convenient when you have one value per type
+context.Set(new RequestMetadata { IpAddress = "127.0.0.1" });
+var metadata = context.Get<RequestMetadata>();
+
+// Keyed access — when you need multiple values of the same type
+context.Set("SourceIp", ipAddress);
+context.Set("TargetIp", targetAddress);
+var source = context.Get<string>("SourceIp");
+```
+
+Full behavior example:
+
+```csharp
+// In a pre-processor or behavior
+public class EnrichContextBehavior<TMessage, TResponse>
+    : IPipelineBehavior<TMessage, TResponse>
+    where TMessage : IMessage
+{
+    private readonly IMediatorContextAccessor _contextAccessor;
+    private readonly IHttpContextAccessor _httpContextAccessor;
+
+    public EnrichContextBehavior(
+        IMediatorContextAccessor contextAccessor,
+        IHttpContextAccessor httpContextAccessor)
+    {
+        _contextAccessor = contextAccessor;
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    public async ValueTask<TResponse> Handle(
+        TMessage message,
+        MessageHandlerDelegate<TResponse> next,
+        CancellationToken ct)
+    {
+        var context = _contextAccessor.Context!;
+
+        // Set typed data
+        context.Set("RequestMetadata", new RequestMetadata
+        {
+            IpAddress = _httpContextAccessor.HttpContext?.Connection.RemoteIpAddress?.ToString(),
+            UserAgent = _httpContextAccessor.HttpContext?.Request.Headers.UserAgent.ToString()
+        });
+
+        // Set keyed data
+        context.Items["StartTime"] = DateTime.UtcNow;
+
+        return await next();
+    }
+}
+```
+
+### Child contexts
+
+`MediatorContext` (the default implementation) supports `CreateChild()` to spawn sub-operations that inherit parent context:
+
+```csharp
+var childContext = context.CreateChild();
+// Child inherits parent's CorrelationId but can have its own CausationId
+```
+
+## IMediatorContextAccessor
+
+Uses `AsyncLocal<T>` under the hood, ensuring context isolation across async flows:
+
+```csharp
+public interface IMediatorContextAccessor
+{
+    IMediatorContext? Context { get; set; }
+}
+```
+
+<Callout type="info">
+The mediator context is especially useful when combined with the Correlation ID, Structured Logging, and Telemetry behaviors from the Observability package — they all read from and write to this context.
+</Callout>

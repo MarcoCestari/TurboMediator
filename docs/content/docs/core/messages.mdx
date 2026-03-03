@@ -1,0 +1,137 @@
+---
+title: Messages
+description: Understanding message types in TurboMediator — Requests, Commands, Queries, and Notifications
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+TurboMediator follows the **CQRS** (Command Query Responsibility Segregation) pattern with clear message type separation. All messages flow through the mediator pipeline and are routed to their respective handlers.
+
+## Message Type Hierarchy
+
+```
+IMessage
+├── IBaseRequest
+│   ├── IRequest<TResponse>    // Generic request
+│   └── IRequest               // Void request (returns Unit)
+├── IBaseCommand
+│   ├── ICommand<TResponse>    // Command with result
+│   └── ICommand               // Void command (returns Unit)
+└── IBaseQuery
+    └── IQuery<TResponse>      // Query (always returns data)
+
+INotification                  // Fire-and-forget, multi-handler
+```
+
+## Requests
+
+Use `IRequest<TResponse>` for generic operations that don't fit neatly into Command or Query categories:
+
+```csharp
+// Request with a response
+public record PingRequest : IRequest<string>;
+
+// Request without response (returns Unit)
+public record LogEventRequest(string Message) : IRequest;
+```
+
+## Commands
+
+Use `ICommand<TResponse>` for **write operations** that modify state:
+
+```csharp
+// Command with a response
+public record CreateUserCommand(string Name, string Email) : ICommand<User>;
+
+// Command without response
+public record DeleteUserCommand(Guid UserId) : ICommand;
+
+// Command with result indicating success
+public record UpdateOrderCommand(Guid OrderId, string Status) : ICommand<bool>;
+```
+
+## Queries
+
+Use `IQuery<TResponse>` for **read operations** that return data without side effects:
+
+```csharp
+public record GetUserQuery(Guid Id) : IQuery<User?>;
+
+public record GetAllUsersQuery : IQuery<IReadOnlyList<User>>;
+
+public record SearchProductsQuery(string Term, int Page) : IQuery<PagedResult<Product>>;
+```
+
+## Notifications
+
+Use `INotification` for **events** that can have zero or more handlers:
+
+```csharp
+public record UserCreatedNotification(Guid UserId, string Email) : INotification;
+
+public record OrderShippedNotification(Guid OrderId, DateTime ShippedAt) : INotification;
+```
+
+<Callout type="info">
+Unlike requests, commands, and queries, notifications can have **multiple handlers**. They are dispatched to all registered handlers based on the configured notification publisher strategy.
+</Callout>
+
+## The Unit Type
+
+For messages that don't return a meaningful value, TurboMediator uses the `Unit` struct:
+
+```csharp
+// IRequest (no generic parameter) is equivalent to IRequest<Unit>
+public record DeleteUserCommand(Guid Id) : ICommand;
+
+// Handler returns Unit
+public class DeleteUserHandler : ICommandHandler<DeleteUserCommand>
+{
+    public ValueTask Handle(DeleteUserCommand command, CancellationToken ct)
+    {
+        // Perform deletion...
+        return default;
+    }
+}
+```
+
+`Unit` provides static helpers:
+- `Unit.Value` — The singleton `Unit` instance
+- `Unit.ValueTask` — A pre-completed `ValueTask<Unit>`
+- `Unit.Task` — A pre-completed `Task<Unit>`
+
+## Sending Messages
+
+All messages are sent through the `IMediator` interface (or its sub-interfaces `ISender` and `IPublisher`):
+
+```csharp
+public class MyService
+{
+    private readonly IMediator _mediator;
+
+    public MyService(IMediator mediator) => _mediator = mediator;
+
+    public async Task DoWork()
+    {
+        // Send a query
+        var user = await _mediator.Send(new GetUserQuery(someId));
+
+        // Send a command
+        var newUser = await _mediator.Send(new CreateUserCommand("Alice", "alice@example.com"));
+
+        // Send a request
+        var pong = await _mediator.Send(new PingRequest());
+
+        // Publish a notification
+        await _mediator.Publish(new UserCreatedNotification(newUser.Id, newUser.Email));
+    }
+}
+```
+
+## Best Practices
+
+1. **Use records** — `record` types provide immutability, value equality, and concise syntax
+2. **Follow CQRS** — Use `ICommand` for writes, `IQuery` for reads
+3. **Keep messages simple** — Messages should be plain data containers, no behavior
+4. **Use meaningful names** — Suffix with `Command`, `Query`, `Request`, or `Notification`
+5. **Prefer specific types** — Use `ICommand`/`IQuery` over `IRequest` when the intent is clear

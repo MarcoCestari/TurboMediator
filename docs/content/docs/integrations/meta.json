@@ -1,0 +1,6 @@
+{
+  "title": "Integrations",
+  "icon": "Plug",
+  "defaultOpen": false,
+  "pages": ["source-generator"]
+}

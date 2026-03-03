@@ -1,0 +1,74 @@
+---
+title: Timeout
+description: Set execution time limits for handlers
+---
+
+The timeout behavior cancels handler execution if it exceeds a configured duration, preventing slow operations from blocking indefinitely.
+
+## Using the Attribute
+
+```csharp
+[Timeout(5000)] // 5 seconds
+public record GenerateReportQuery(DateRange Range) : IQuery<Report>;
+```
+
+## Using Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithTimeout<GenerateReportQuery, Report>(TimeSpan.FromSeconds(5));
+});
+```
+
+## How It Works
+
+The behavior races the handler execution against a `Task.Delay`:
+
+1. Starts the handler and a delay timer in parallel
+2. If the handler completes first → returns the result
+3. If the timer completes first → throws `TimeoutException`
+
+## Practical Example
+
+```csharp
+// Slow external API call with 3-second timeout
+[Timeout(3000)]
+public record FetchWeatherQuery(string City) : IQuery<WeatherData>;
+
+public class FetchWeatherHandler : IQueryHandler<FetchWeatherQuery, WeatherData>
+{
+    private readonly HttpClient _httpClient;
+
+    public FetchWeatherHandler(HttpClient httpClient) => _httpClient = httpClient;
+
+    public async ValueTask<WeatherData> Handle(
+        FetchWeatherQuery query, CancellationToken ct)
+    {
+        var response = await _httpClient.GetFromJsonAsync<WeatherData>(
+            $"/api/weather/{query.City}", ct);
+        return response!;
+    }
+}
+
+// Usage
+try
+{
+    var weather = await mediator.Send(new FetchWeatherQuery("London"));
+}
+catch (TimeoutException)
+{
+    // Handler took too long
+    return Results.StatusCode(504);
+}
+```
+
+## Combining with Retry
+
+Timeout works well with retry — each attempt has its own timeout:
+
+```csharp
+[Retry(maxAttempts: 3, delayMilliseconds: 500)]
+[Timeout(2000)]
+public record CallApiCommand(string Endpoint) : ICommand<ApiResponse>;
+```

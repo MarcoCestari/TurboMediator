@@ -1,0 +1,187 @@
+---
+title: Rate Limiting
+description: Control request throughput with rate limiting and bulkhead isolation
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The rate limiting package provides two complementary behaviors: **Rate Limiting** to control request throughput, and **Bulkhead Isolation** to limit concurrent executions.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.RateLimiting
+```
+
+## Rate Limiting
+
+### Using the Attribute
+
+```csharp
+[RateLimit(maxRequests: 10, windowSeconds: 60)]
+public record SendSmsCommand(string Phone, string Message) : ICommand;
+
+[RateLimit(maxRequests: 100, windowSeconds: 60, PerUser = true)]
+public record SearchQuery(string Term) : IQuery<SearchResult>;
+
+[RateLimit(maxRequests: 50, windowSeconds: 60, PerTenant = true)]
+public record ApiCallCommand(string Endpoint) : ICommand<ApiResponse>;
+```
+
+### Using Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithRateLimiting<SendSmsCommand, Unit>(options =>
+    {
+        options.MaxRequests = 10;
+        options.WindowSeconds = 60;
+        options.Algorithm = RateLimiterAlgorithm.SlidingWindow;
+        options.PerUser = true;
+        options.ThrowOnRateLimitExceeded = true;
+    });
+
+    // Or apply globally
+    m.WithGlobalRateLimiting(options =>
+    {
+        options.MaxRequests = 1000;
+        options.WindowSeconds = 60;
+    });
+});
+```
+
+### RateLimitOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `MaxRequests` | 100 | Max requests per window |
+| `WindowSeconds` | 60 | Time window in seconds |
+| `PerUser` | `false` | Per-user rate limiting |
+| `PerTenant` | `false` | Per-tenant rate limiting |
+| `PerIpAddress` | `false` | Per-IP rate limiting |
+| `Algorithm` | `RateLimiterAlgorithm.FixedWindow` | Algorithm: FixedWindow, SlidingWindow, TokenBucket, Concurrency |
+| `TokensPerPeriod` | 10 | Tokens per period (TokenBucket algorithm) |
+| `SegmentsPerWindow` | 4 | Segments per window (SlidingWindow algorithm) |
+| `QueueProcessingOrder` | `OldestFirst` | Order for processing queued requests |
+| `PolicyName` | `null` | Named policy identifier |
+| `QueueExceededRequests` | `false` | Queue instead of reject |
+| `MaxQueueSize` | 0 | Maximum queue size |
+| `ThrowOnRateLimitExceeded` | `true` | Throw vs return default |
+| `UserIdProvider` | `null` | Custom user ID provider |
+| `TenantIdProvider` | `null` | Custom tenant ID provider |
+| `IpAddressProvider` | `null` | Custom IP provider |
+| `CustomRateLimiterFactory` | `null` | Custom rate limiter |
+
+### Algorithms
+
+| Algorithm | Description |
+|---|---|
+| `FixedWindow` | Fixed time windows (e.g., 100 req/min) |
+| `SlidingWindow` | Rolling time window for smoother limiting |
+| `TokenBucket` | Token-based with steady refill rate |
+| `Concurrency` | Limits concurrent executions |
+
+### Convenience Methods
+
+```csharp
+m.WithSlidingWindowRateLimit<ApiCallCommand, ApiResponse>(
+    maxRequests: 50, windowSeconds: 60, segmentsPerWindow: 4);
+
+m.WithTokenBucketRateLimit<ApiCallCommand, ApiResponse>(
+    bucketSize: 100, tokensPerPeriod: 10, replenishmentPeriodSeconds: 60);
+
+m.WithPerUserRateLimit<SearchQuery, SearchResult>(
+    maxRequestsPerUser: 10, windowSeconds: 60, userIdProvider: () => GetCurrentUserId());
+```
+
+### RateLimitExceededException
+
+```csharp
+try
+{
+    await mediator.Send(new SendSmsCommand("555-1234", "Hello"));
+}
+catch (RateLimitExceededException ex)
+{
+    // ex.MessageType — what was rate limited
+    // ex.PartitionKey — the partition that exceeded limits
+    // ex.RetryAfter — suggested retry delay
+    return Results.StatusCode(429);
+}
+```
+
+---
+
+## Bulkhead Isolation
+
+Limits **concurrent execution** of handlers to prevent resource exhaustion.
+
+### Using the Attribute
+
+```csharp
+[Bulkhead(maxConcurrent: 5, maxQueue: 10)]
+public record ProcessVideoCommand(string VideoUrl) : ICommand<ProcessResult>;
+```
+
+### Using Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithBulkhead<ProcessVideoCommand, ProcessResult>(options =>
+    {
+        options.MaxConcurrent = 5;
+        options.MaxQueue = 10;
+        options.QueueTimeout = TimeSpan.FromSeconds(30);
+        options.ThrowOnBulkheadFull = true;
+        options.TrackMetrics = true;
+        options.OnRejection = (info) =>
+        {
+            Console.WriteLine($"Bulkhead full for {info.MessageType}: {info.Reason}");
+        };
+    });
+
+    // Or global bulkhead
+    m.WithGlobalBulkhead(options =>
+    {
+        options.MaxConcurrent = 50;
+    });
+});
+```
+
+### BulkheadOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `MaxConcurrent` | 10 | Maximum concurrent executions |
+| `MaxQueue` | 100 | Maximum queued requests |
+| `QueueTimeout` | `null` | Timeout waiting in queue |
+| `ThrowOnBulkheadFull` | `true` | Throw `BulkheadFullException` |
+| `TrackMetrics` | `false` | Track concurrency metrics |
+| `PerPartition` | `false` | Separate bulkheads per partition |
+| `PartitionKeyProvider` | `null` | Custom partition key |
+| `OnRejection` | `null` | Callback when rejected |
+
+## Combined Rate Limiting + Bulkhead
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    // Apply both at once
+    m.WithThrottling<ProcessVideoCommand, ProcessResult>(
+        rateLimitOptions =>
+        {
+            rateLimitOptions.MaxRequests = 100;
+            rateLimitOptions.WindowSeconds = 60;
+        },
+        bulkheadOptions =>
+        {
+            bulkheadOptions.MaxConcurrent = 5;
+        });
+});
+```
+
+<Callout type="info">
+Rate limiting controls **throughput** (requests per time window), while bulkhead isolation controls **concurrency** (simultaneous executions). Use both together for comprehensive resource protection.
+</Callout>

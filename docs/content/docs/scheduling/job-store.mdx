@@ -1,0 +1,168 @@
+---
+title: Job Store
+description: Persistence, records, and runtime management for scheduled jobs
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## IJobStore
+
+The `IJobStore` interface defines how job definitions and occurrence records are persisted:
+
+```csharp
+public interface IJobStore
+{
+    // Job definitions
+    Task UpsertJobAsync(RecurringJobRecord job, CancellationToken ct = default);
+    Task<RecurringJobRecord?> GetJobAsync(string jobId, CancellationToken ct = default);
+    Task<IReadOnlyCollection<RecurringJobRecord>> GetAllJobsAsync(CancellationToken ct = default);
+    Task<IReadOnlyCollection<RecurringJobRecord>> GetDueJobsAsync(DateTimeOffset now, CancellationToken ct = default);
+    Task RemoveJobAsync(string jobId, CancellationToken ct = default);
+
+    // Locking (concurrency)
+    Task<bool> TryLockJobAsync(string jobId, CancellationToken ct = default);
+    Task ReleaseJobAsync(string jobId, CancellationToken ct = default);
+
+    // Occurrence tracking
+    Task AddOccurrenceAsync(JobOccurrenceRecord occurrence, CancellationToken ct = default);
+    Task UpdateOccurrenceAsync(JobOccurrenceRecord occurrence, CancellationToken ct = default);
+    Task<IReadOnlyCollection<JobOccurrenceRecord>> GetOccurrencesAsync(
+        string jobId, int limit = 20, CancellationToken ct = default);
+}
+```
+
+## Built-in: In-Memory Store
+
+For development and testing, a fast in-memory store is provided by default:
+
+```csharp
+scheduling.UseInMemoryStore();
+```
+
+- Uses `ConcurrentDictionary` and `SemaphoreSlim` for thread safety
+- Data is lost on application restart
+- Locking is process-local (not suitable for multi-instance deployments)
+
+## RecurringJobRecord
+
+The job definition model:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `JobId` | `string` | Unique identifier |
+| `MessageTypeName` | `string` | Full type name of the command |
+| `CronExpression` | `string?` | Cron expression (null if interval-based) |
+| `Interval` | `TimeSpan?` | Fixed interval (null if cron-based) |
+| `NextRunAt` | `DateTimeOffset?` | Next scheduled execution |
+| `LastRunAt` | `DateTimeOffset?` | Last completed execution |
+| `Status` | `JobStatus` | Current status (Scheduled, Running, Paused, etc.) |
+| `RetryIntervalSeconds` | `int[]` | Retry intervals derived from RetryStrategy |
+| `SkipIfAlreadyRunning` | `bool` | Whether to skip overlapping executions |
+| `Priority` | `JobPriority` | Execution priority |
+| `MessagePayload` | `string?` | Serialized command data (JSON) |
+| `TimeZoneId` | `string?` | IANA timezone identifier |
+
+## JobOccurrenceRecord
+
+Each execution of a recurring job creates an occurrence:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `Id` | `Guid` | Unique occurrence ID |
+| `JobId` | `string` | Parent job identifier |
+| `StartedAt` | `DateTimeOffset` | When execution began |
+| `CompletedAt` | `DateTimeOffset?` | When execution finished |
+| `Status` | `JobStatus` | Outcome (Done, Failed, Skipped, Cancelled) |
+| `RetryCount` | `int` | Number of retries performed |
+| `Error` | `string?` | Error message if failed |
+| `ParentOccurrenceId` | `Guid?` | Reserved for future chaining |
+| `RunCondition` | `RunCondition` | Reserved for future chaining |
+
+## IJobScheduler (Runtime Management)
+
+The `IJobScheduler` interface allows runtime control of jobs:
+
+```csharp
+public interface IJobScheduler
+{
+    Task PauseJobAsync(string jobId, CancellationToken ct = default);
+    Task ResumeJobAsync(string jobId, CancellationToken ct = default);
+    Task RemoveJobAsync(string jobId, CancellationToken ct = default);
+    Task TriggerNowAsync(string jobId, CancellationToken ct = default);
+    Task<IReadOnlyCollection<JobOccurrenceRecord>> GetOccurrencesAsync(
+        string jobId, int limit = 20, CancellationToken ct = default);
+    Task<RecurringJobRecord?> GetJobAsync(string jobId, CancellationToken ct = default);
+    Task<IReadOnlyCollection<RecurringJobRecord>> GetAllJobsAsync(CancellationToken ct = default);
+}
+```
+
+### Exposing via API Endpoints
+
+```csharp
+var jobs = app.MapGroup("/api/jobs");
+
+jobs.MapGet("/", async (IJobScheduler scheduler) =>
+    Results.Ok(await scheduler.GetAllJobsAsync()));
+
+jobs.MapPost("/{id}/pause", async (string id, IJobScheduler scheduler) =>
+{
+    await scheduler.PauseJobAsync(id);
+    return Results.NoContent();
+});
+
+jobs.MapPost("/{id}/resume", async (string id, IJobScheduler scheduler) =>
+{
+    await scheduler.ResumeJobAsync(id);
+    return Results.NoContent();
+});
+
+jobs.MapPost("/{id}/trigger", async (string id, IJobScheduler scheduler) =>
+{
+    await scheduler.TriggerNowAsync(id);
+    return Results.Accepted();
+});
+
+jobs.MapDelete("/{id}", async (string id, IJobScheduler scheduler) =>
+{
+    await scheduler.RemoveJobAsync(id);
+    return Results.NoContent();
+});
+
+jobs.MapGet("/{id}/occurrences", async (string id, IJobScheduler scheduler) =>
+    Results.Ok(await scheduler.GetOccurrencesAsync(id)));
+```
+
+## Custom Job Store
+
+Implement `IJobStore` for any persistence backend:
+
+```csharp
+public class MongoJobStore : IJobStore
+{
+    private readonly IMongoCollection<RecurringJobRecord> _jobs;
+    private readonly IMongoCollection<JobOccurrenceRecord> _occurrences;
+
+    // Implement all IJobStore methods...
+}
+```
+
+Register it:
+
+```csharp
+scheduling.UseStore<MongoJobStore>();
+```
+
+<Callout type="info">
+For production use with Entity Framework Core, see the [Entity Framework](./entity-framework) page which provides a ready-made `IJobStore` implementation with optimistic concurrency.
+</Callout>
+
+## Polling Configuration
+
+```csharp
+scheduling.Configure(options =>
+{
+    options.PollingInterval = TimeSpan.FromSeconds(5); // default: 10s
+});
+```
+
+The processor uses `PeriodicTimer` for accurate, non-drifting intervals. Shorter polling intervals mean lower latency but higher database load.

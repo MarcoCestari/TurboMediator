@@ -1,0 +1,142 @@
+---
+title: Entity Framework Core
+description: Persist scheduled jobs using EF Core with optimistic concurrency
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Scheduling.EntityFramework
+```
+
+## Quick Setup
+
+```csharp
+builder.Services.AddDbContext<SchedulingDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+
+builder.Services.AddTurboMediator(m => m
+    .WithScheduling(scheduling =>
+    {
+        scheduling.UseEfCoreStore();
+
+        scheduling.AddRecurringJob<CleanupCommand>("cleanup")
+            .WithCron("0 3 * * *")
+            .WithRetry(RetryStrategy.Fixed(3, 60))
+            .WithData(() => new CleanupCommand());
+    })
+);
+```
+
+## SchedulingDbContext
+
+The `SchedulingDbContext` provides two tables:
+
+```csharp
+public class SchedulingDbContext : DbContext
+{
+    public DbSet<RecurringJobEntity> RecurringJobs => Set<RecurringJobEntity>();
+    public DbSet<JobOccurrenceEntity> JobOccurrences => Set<JobOccurrenceEntity>();
+}
+```
+
+### Table: SchedulingRecurringJobs
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `JobId` | `varchar(256)` | Primary key |
+| `MessageTypeName` | `nvarchar(max)` | |
+| `CronExpression` | `nvarchar(max)` | Nullable |
+| `IntervalTicks` | `bigint` | TimeSpan stored as ticks |
+| `NextRunAt` | `datetimeoffset` | Nullable |
+| `LastRunAt` | `datetimeoffset` | Nullable |
+| `Status` | `nvarchar(max)` | String conversion |
+| `RetryIntervalSecondsJson` | `nvarchar(max)` | JSON array |
+| `SkipIfAlreadyRunning` | `bit` | |
+| `Priority` | `nvarchar(max)` | String conversion |
+| `MessagePayload` | `nvarchar(max)` | Nullable |
+| `TimeZoneId` | `nvarchar(max)` | Nullable |
+| `RowVersion` | `rowversion` | Optimistic concurrency |
+
+**Index:** `IX_SchedulingRecurringJobs_Status_NextRunAt` on (`Status`, `NextRunAt`)
+
+### Table: SchedulingJobOccurrences
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `Id` | `uniqueidentifier` | Primary key |
+| `JobId` | `nvarchar(256)` | |
+| `StartedAt` | `datetimeoffset` | |
+| `CompletedAt` | `datetimeoffset` | Nullable |
+| `Status` | `nvarchar(max)` | String conversion |
+| `RetryCount` | `int` | |
+| `Error` | `nvarchar(max)` | Nullable |
+| `ParentOccurrenceId` | `uniqueidentifier` | Nullable |
+| `RunCondition` | `nvarchar(max)` | String conversion |
+
+**Index:** `IX_SchedulingJobOccurrences_JobId_StartedAt` on (`JobId`, `StartedAt`)
+
+## Migrations
+
+Generate migrations using the standard EF Core tooling:
+
+```bash
+dotnet ef migrations add InitScheduling --context SchedulingDbContext
+dotnet ef database update --context SchedulingDbContext
+```
+
+If you're using a separate migration assembly:
+
+```csharp
+builder.Services.AddDbContext<SchedulingDbContext>(options =>
+    options.UseSqlServer(connectionString, sql =>
+        sql.MigrationsAssembly("MyApp.Migrations")));
+```
+
+## Optimistic Concurrency
+
+The `EfCoreJobStore.TryLockJobAsync` uses EF Core's `RowVersion` concurrency token:
+
+1. Load the job
+2. Set `Status = Running`
+3. Call `SaveChangesAsync`
+4. If `DbUpdateConcurrencyException` is thrown, another instance locked it first → return `false`
+
+This ensures safe multi-instance deployments without distributed locks.
+
+```
+Instance A: Load job → Status=Running → Save ✓ (locked)
+Instance B: Load job → Status=Running → Save ✗ (concurrency conflict)
+```
+
+## Custom DbContext Configuration
+
+You can extend or customize the `SchedulingDbContext`:
+
+```csharp
+builder.Services.AddDbContext<SchedulingDbContext>(options =>
+    options.UseNpgsql(connectionString)  // PostgreSQL
+           .EnableDetailedErrors()
+           .EnableSensitiveDataLogging());
+```
+
+<Callout type="warn">
+The SchedulingDbContext is independent from your application's DbContext. Make sure to run migrations separately for the scheduling context.
+</Callout>
+
+## Supported Databases
+
+Any EF Core provider works. Tested with:
+
+- SQL Server
+- PostgreSQL (Npgsql)
+- SQLite
+- In-Memory (for testing)
+
+```csharp
+// Testing with InMemory
+builder.Services.AddDbContext<SchedulingDbContext>(options =>
+    options.UseInMemoryDatabase("SchedulingTests"));
+```

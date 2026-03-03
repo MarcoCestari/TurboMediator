@@ -1,0 +1,118 @@
+---
+title: Installation
+description: How to install TurboMediator and its optional packages
+---
+
+## Requirements
+
+- .NET 8.0+ (or .NET Standard 2.0 for the abstractions)
+- C# 11+ (for source generator support)
+
+## Core Packages
+
+Every TurboMediator project requires these two packages:
+
+```bash title="Terminal"
+dotnet add package TurboMediator.Abstractions
+dotnet add package TurboMediator.SourceGenerator
+```
+
+The **Abstractions** package contains all core interfaces (`IRequest`, `ICommand`, `IQuery`, `INotification`, handlers, pipeline behaviors, etc.).
+
+The **SourceGenerator** package contains the Roslyn incremental source generator that produces the `Mediator` implementation class at compile time.
+
+## Optional Packages
+
+Install only the packages you need. Each package is independent and adds specific pipeline behaviors:
+
+```bash title="Validation"
+dotnet add package TurboMediator.FluentValidation
+```
+
+```bash title="Resilience (Retry, Circuit Breaker, Timeout, Fallback, Hedging)"
+dotnet add package TurboMediator.Resilience
+```
+
+```bash title="Result Pattern (Functional Error Handling)"
+dotnet add package TurboMediator.Result
+```
+
+```bash title="Observability (Telemetry, Metrics, Correlation, Logging, Health Checks)"
+dotnet add package TurboMediator.Observability
+```
+
+```bash title="Caching (In-Memory, Custom Providers)"
+dotnet add package TurboMediator.Caching
+```
+
+```bash title="Caching - Redis Provider"
+dotnet add package TurboMediator.Caching.Redis
+```
+
+```bash title="Validation (Built-in Lightweight Validator)"
+dotnet add package TurboMediator.Validation
+```
+
+```bash title="Enterprise (Authorization, Multi-Tenancy, Deduplication)"
+dotnet add package TurboMediator.Enterprise
+```
+
+```bash title="Scheduling (Cron Jobs, Recurring Jobs)"
+dotnet add package TurboMediator.Scheduling
+dotnet add package TurboMediator.Scheduling.EntityFramework
+```
+
+```bash title="Rate Limiting & Bulkhead"
+dotnet add package TurboMediator.RateLimiting
+```
+
+```bash title="Persistence (Transactions, Outbox, Audit)"
+dotnet add package TurboMediator.Persistence
+dotnet add package TurboMediator.Persistence.EF
+```
+
+```bash title="Saga"
+dotnet add package TurboMediator.Saga
+dotnet add package TurboMediator.Saga.EntityFramework
+```
+
+```bash title="Feature Flags"
+dotnet add package TurboMediator.FeatureFlags
+dotnet add package TurboMediator.FeatureFlags.FeatureManagement
+```
+
+```bash title="Batching"
+dotnet add package TurboMediator.Batching
+```
+
+```bash title="Testing"
+dotnet add package TurboMediator.Testing
+```
+
+```bash title="CLI Tool (global)"
+dotnet tool install --global TurboMediator.Cli
+```
+
+## Project Setup
+
+After installing the packages, register TurboMediator in your DI container:
+
+```csharp title="Program.cs"
+using Microsoft.Extensions.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Basic registration - auto-discovers all handlers
+builder.Services.AddTurboMediator();
+
+// Or with configuration
+builder.Services.AddTurboMediator(mediator =>
+{
+    mediator
+        .WithSequentialNotifications();
+});
+
+var app = builder.Build();
+```
+
+The source generator automatically generates the `AddTurboMediator()` extension method with all discovered handler registrations.

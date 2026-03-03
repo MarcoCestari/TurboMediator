@@ -1,0 +1,233 @@
+---
+title: Saga Pattern
+description: Orchestrate distributed transactions with compensating actions
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The saga pattern manages distributed transactions by breaking them into a sequence of steps, each with a compensating action that undoes the step if a later step fails.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Saga
+dotnet add package TurboMediator.Saga.EntityFramework  # Optional: EF Core store
+```
+
+## Defining a Saga
+
+Extend `Saga<TData>` and define steps in the constructor:
+
+```csharp
+public class OrderSagaData
+{
+    public Guid OrderId { get; set; }
+    public Guid PaymentId { get; set; }
+    public Guid ShipmentId { get; set; }
+    public string CustomerEmail { get; set; } = "";
+}
+
+public class OrderSaga : Saga<OrderSagaData>
+{
+    public OrderSaga()
+    {
+        AddStep(Step("CreateOrder")
+            .Execute<CreateOrderCommand, Order>(
+                data => new CreateOrderCommand(data.CustomerEmail),
+                (data, result) => data.OrderId = result.Id)
+            .Compensate<CancelOrderCommand>(
+                data => new CancelOrderCommand(data.OrderId)));
+
+        AddStep(Step("ProcessPayment")
+            .Execute<ProcessPaymentCommand, PaymentResult>(
+                data => new ProcessPaymentCommand(data.OrderId, 99.99m),
+                (data, result) => data.PaymentId = result.PaymentId)
+            .Compensate<RefundPaymentCommand>(
+                data => new RefundPaymentCommand(data.PaymentId)));
+
+        AddStep(Step("ArrangeShipment")
+            .Execute<ArrangeShipmentCommand, ShipmentResult>(
+                data => new ArrangeShipmentCommand(data.OrderId),
+                (data, result) => data.ShipmentId = result.ShipmentId)
+            .Compensate<CancelShipmentCommand>(
+                data => new CancelShipmentCommand(data.ShipmentId)));
+
+        AddStep(Step("SendConfirmation")
+            .Execute<SendOrderConfirmationCommand, Unit>(
+                data => new SendOrderConfirmationCommand(data.CustomerEmail, data.OrderId)));
+            // No compensation for email — can't unsend it
+    }
+}
+```
+
+## SagaStepBuilder API
+
+| Method | Description |
+|---|---|
+| `Step(name)` | Creates a `SagaStepBuilder<TData>` for a named step |
+| `AddStep(builder)` | Registers the step builder into the saga |
+| `.Execute<TCmd, TResp>(factory, onSuccess?)` | Define the step's forward action via a mediator command |
+| `.Execute(Func<IMediator, TData, CancellationToken, ValueTask<bool>>)` | Custom async execution function |
+| `.Compensate<TCmd>(factory)` | Define the compensating action via a mediator command |
+| `.Compensate(Func<IMediator, TData, CancellationToken, ValueTask>)` | Custom async compensation function |
+
+## Executing Sagas
+
+Use `SagaOrchestrator<TData>`:
+
+```csharp
+var orchestrator = serviceProvider.GetRequiredService<SagaOrchestrator<OrderSagaData>>();
+var saga = new OrderSaga();
+
+var result = await orchestrator.ExecuteAsync(
+    saga,
+    new OrderSagaData { CustomerEmail = "john@example.com" },
+    correlationId: Guid.NewGuid().ToString());
+```
+
+## SagaResult
+
+```csharp
+public class SagaResult<TData>
+{
+    public Guid SagaId { get; }
+    public bool IsSuccess { get; }
+    public TData? Data { get; }
+    public string? Error { get; }
+    public IReadOnlyList<string> CompensationErrors { get; }
+}
+```
+
+## Saga Status
+
+```csharp
+public enum SagaStatus
+{
+    NotStarted,    // Initial state
+    Running,       // Executing steps
+    Completed,     // All steps completed
+    Failed,        // A step failed
+    Compensating,  // Running compensating actions
+    Compensated    // All compensations completed
+}
+```
+
+## Compensation Flow
+
+When a step fails, the orchestrator runs compensating actions **in reverse order**:
+
+```
+Step 1 ✓ → Step 2 ✓ → Step 3 ✗
+                              │
+              Compensate 2 ← Compensate 3
+                    │
+              Compensate 1
+```
+
+## Resuming Interrupted Sagas
+
+If the application crashes during saga execution, you can resume:
+
+```csharp
+var result = await orchestrator.ResumeAsync(saga, sagaId);
+```
+
+## Saga Stores
+
+### In-Memory (built-in)
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithSagas(saga =>
+    {
+        saga.UseInMemoryStore();
+        saga.AddOrchestrator<OrderSagaData>();
+    });
+});
+
+// Or shorthand
+builder.Services.AddTurboMediator(m => m.WithInMemorySagas());
+```
+
+### Entity Framework Core
+
+```bash
+dotnet add package TurboMediator.Saga.EntityFramework
+```
+
+```csharp
+// DbContext setup
+protected override void OnModelCreating(ModelBuilder modelBuilder)
+{
+    modelBuilder.ApplySagaStateConfiguration();
+}
+
+// Registration
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithSagas(saga =>
+    {
+        saga.UseStore<EfCoreSagaStore<AppDbContext>>();
+        saga.AddOrchestrator<OrderSagaData>();
+    });
+
+    // Or register directly on services
+    // builder.Services.AddEfCoreSagaStore<AppDbContext>();
+});
+```
+
+## Complete Example
+
+```csharp
+// 1. Define saga data
+public class BookingData
+{
+    public Guid FlightId { get; set; }
+    public Guid HotelId { get; set; }
+    public Guid CarId { get; set; }
+}
+
+// 2. Define the saga
+public class TravelBookingSaga : Saga<BookingData>
+{
+    public TravelBookingSaga()
+    {
+        AddStep(Step("BookFlight")
+            .Execute<BookFlightCommand, FlightBooking>(
+                d => new BookFlightCommand(d.FlightId),
+                (d, r) => d.FlightId = r.BookingId)
+            .Compensate<CancelFlightCommand>(
+                d => new CancelFlightCommand(d.FlightId)));
+
+        AddStep(Step("BookHotel")
+            .Execute<BookHotelCommand, HotelBooking>(
+                d => new BookHotelCommand(d.HotelId),
+                (d, r) => d.HotelId = r.BookingId)
+            .Compensate<CancelHotelCommand>(
+                d => new CancelHotelCommand(d.HotelId)));
+
+        AddStep(Step("BookCar")
+            .Execute<BookCarCommand, CarBooking>(
+                d => new BookCarCommand(d.CarId),
+                (d, r) => d.CarId = r.BookingId)
+            .Compensate<CancelCarCommand>(
+                d => new CancelCarCommand(d.CarId)));
+    }
+}
+
+// 3. Execute
+var result = await orchestrator.ExecuteAsync(
+    new TravelBookingSaga(),
+    new BookingData { FlightId = flightId, HotelId = hotelId, CarId = carId },
+    correlationId: Guid.NewGuid().ToString());
+
+if (result.IsSuccess)
+    Console.WriteLine($"Booking completed: {result.SagaId}");
+else
+    Console.WriteLine($"Booking failed: {result.Error}");
+```
+
+<Callout type="warn">
+Sagas provide **eventual consistency**, not ACID transactions. Each step commits independently. Design compensating actions carefully to handle partial states.
+</Callout>

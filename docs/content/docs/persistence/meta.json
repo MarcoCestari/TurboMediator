@@ -1,0 +1,6 @@
+{
+  "title": "Persistence",
+  "icon": "Database",
+  "defaultOpen": false,
+  "pages": ["transactions", "outbox", "inbox", "audit", "entity-framework"]
+}

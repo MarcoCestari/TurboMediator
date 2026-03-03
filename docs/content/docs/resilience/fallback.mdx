@@ -1,0 +1,105 @@
+---
+title: Fallback
+description: Define fallback strategies when handlers fail
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The fallback behavior provides alternative responses when the primary handler fails. You can chain multiple fallback handlers with priority ordering and exception type filtering.
+
+## IFallbackHandler
+
+```csharp
+public interface IFallbackHandler<in TMessage, TResponse>
+    where TMessage : IMessage
+{
+    ValueTask<TResponse> HandleFallbackAsync(
+        TMessage message,
+        Exception exception,
+        CancellationToken cancellationToken);
+}
+```
+
+## Using the Attribute
+
+```csharp
+[Fallback(typeof(CachedProductFallback), Order = 1)]
+[Fallback(typeof(DefaultProductFallback), Order = 2)]
+public record GetProductQuery(Guid Id) : IQuery<Product>;
+```
+
+### Attribute Properties
+
+| Property | Description |
+|---|---|
+| `typeof(HandlerType)` | The fallback handler type |
+| `Order` | Execution priority (lower runs first) |
+| `OnExceptionTypes` | Only trigger for specific exception types |
+
+## Fallback Handlers
+
+```csharp
+// Primary fallback: try cache
+public class CachedProductFallback : IFallbackHandler<GetProductQuery, Product>
+{
+    private readonly ICacheProvider _cache;
+
+    public CachedProductFallback(ICacheProvider cache) => _cache = cache;
+
+    public async ValueTask<Product> HandleFallbackAsync(
+        GetProductQuery message, Exception exception, CancellationToken ct)
+    {
+        var cached = await _cache.GetAsync<Product>($"product:{message.Id}");
+        return cached ?? throw new InvalidOperationException("No cached product");
+    }
+}
+
+// Secondary fallback: return default
+public class DefaultProductFallback : IFallbackHandler<GetProductQuery, Product>
+{
+    public ValueTask<Product> HandleFallbackAsync(
+        GetProductQuery message, Exception exception, CancellationToken ct)
+    {
+        return new ValueTask<Product>(Product.NotFound(message.Id));
+    }
+}
+```
+
+## Using Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithFallback<GetProductQuery, Product>(options =>
+    {
+        options.ThrowOnAllFallbacksFailure = true;
+        options.OnFallbackInvoked = (info) =>
+        {
+            Console.WriteLine($"Fallback {info.FallbackHandlerType.Name} invoked for {info.MessageType} (attempt {info.AttemptNumber})");
+        };
+    });
+});
+```
+
+## FallbackOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `ExceptionTypes` | All | Exception types that trigger fallback |
+| `ShouldHandle` | `null` | Custom predicate for when to use fallback |
+| `ThrowOnAllFallbacksFailure` | `true` | Throw if all fallbacks fail |
+| `OnFallbackInvoked` | `null` | Callback when a fallback is used |
+| `DefaultValueFactory` | `null` | Factory for default value if all else fails |
+
+## Exception-Specific Fallbacks
+
+```csharp
+[Fallback(typeof(NetworkFallback), OnExceptionTypes = new[] { typeof(HttpRequestException) })]
+[Fallback(typeof(TimeoutFallback), OnExceptionTypes = new[] { typeof(TimeoutException) })]
+[Fallback(typeof(GenericFallback), Order = 99)]
+public record GetDataQuery(string Key) : IQuery<Data>;
+```
+
+<Callout type="info">
+Fallbacks are tried in `Order` sequence. The first fallback that returns successfully wins. If a fallback also throws, the next fallback in the chain is tried.
+</Callout>

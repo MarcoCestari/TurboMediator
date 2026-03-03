@@ -1,0 +1,117 @@
+---
+title: Batching
+description: Batch multiple queries for efficient bulk processing
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The batching behavior collects multiple individual queries and processes them together in a single batch, significantly reducing database round-trips and improving throughput.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Batching
+```
+
+## Defining Batchable Queries
+
+Mark queries with `IBatchableQuery<TResponse>`:
+
+```csharp
+public record GetProductByIdQuery(Guid ProductId)
+    : IBatchableQuery<Product?>;
+
+public record GetUserByIdQuery(Guid UserId)
+    : IBatchableQuery<User?>;
+```
+
+## Creating Batch Handlers
+
+Implement `IBatchHandler<TQuery, TResponse>` to handle a batch of queries at once:
+
+```csharp
+public class GetProductBatchHandler
+    : IBatchHandler<GetProductByIdQuery, Product?>
+{
+    private readonly AppDbContext _db;
+
+    public GetProductBatchHandler(AppDbContext db) => _db = db;
+
+    public async ValueTask<IDictionary<GetProductByIdQuery, Product?>> HandleAsync(
+        IReadOnlyList<GetProductByIdQuery> queries,
+        CancellationToken ct)
+    {
+        var ids = queries.Select(q => q.ProductId).ToList();
+
+        // Single database query for all products
+        var products = await _db.Products
+            .Where(p => ids.Contains(p.Id))
+            .ToDictionaryAsync(p => p.Id, ct);
+
+        return queries.ToDictionary(
+            q => q,
+            q => products.GetValueOrDefault(q.ProductId)
+        );
+    }
+}
+```
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithBatching(batching =>
+    {
+        batching
+            .WithMaxBatchSize(50)
+            .WithMaxWaitTime(TimeSpan.FromMilliseconds(20))
+            .WithThrowIfNoBatchHandler(false)
+            .OnBatchProcessed(info =>
+            {
+                Console.WriteLine($"Batch of {info.BatchSize} {info.QueryType.Name} processed in {info.Duration.TotalMilliseconds}ms");
+            });
+    });
+});
+```
+
+## BatchingOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `MaxBatchSize` | 100 | Maximum queries per batch |
+| `MaxWaitTime` | 10ms | Maximum time to wait for batch to fill |
+| `ThrowIfNoBatchHandler` | `false` | Throw if no batch handler exists (falls back to individual) |
+| `OnBatchProcessed` | `null` | Callback after batch processing |
+
+## How It Works
+
+1. Individual `Send()` calls with `IBatchableQuery` are queued
+2. The batching behavior collects queries in a `ConcurrentQueue`
+3. After `MaxWaitTime` or reaching `MaxBatchSize`, the batch is processed
+4. Each query receives its individual result from the batch
+5. If no `IBatchHandler` is registered, queries fall back to individual execution
+
+## Practical Example
+
+```csharp
+// API endpoint that triggers many product lookups
+app.MapPost("/cart/validate", async (
+    CartRequest cart,
+    IMediator mediator) =>
+{
+    // These queries are automatically batched into a single DB call
+    var tasks = cart.Items.Select(async item =>
+    {
+        var product = await mediator.Send(new GetProductByIdQuery(item.ProductId));
+        return new ValidatedItem(item.ProductId, product is not null, product?.Price);
+    });
+
+    var results = await Task.WhenAll(tasks);
+    return Results.Ok(results);
+});
+```
+
+<Callout type="info">
+Batching is most effective when many queries of the same type are sent concurrently, such as in GraphQL resolvers or bulk validation scenarios. The behavior transparently groups queries without requiring any changes to the caller.
+</Callout>

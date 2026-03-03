@@ -1,0 +1,153 @@
+---
+title: Feature Flags
+description: Conditionally enable or disable handlers with feature flags
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The feature flag behavior allows you to conditionally enable or disable message handlers based on feature flags, without deploying new code.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.FeatureFlags
+
+# Optional: Microsoft.FeatureManagement integration
+dotnet add package TurboMediator.FeatureFlags.FeatureManagement
+```
+
+## Using the Attribute
+
+```csharp
+[FeatureFlag("new-checkout")]
+public record NewCheckoutCommand(Guid CartId) : ICommand<CheckoutResult>;
+
+[FeatureFlag("beta-search", FallbackBehavior = FeatureFallback.ReturnDefault)]
+public record BetaSearchQuery(string Term) : IQuery<SearchResult>;
+
+[FeatureFlag("premium-export", FallbackBehavior = FeatureFallback.Throw)]
+public record ExportReportCommand(Guid ReportId) : ICommand<byte[]>;
+
+[FeatureFlag("per-user-feature", PerUser = true)]
+public record PersonalizedFeedQuery : IQuery<Feed>;
+```
+
+### Attribute Properties
+
+| Property | Default | Description |
+|---|---|---|
+| Feature name | Required | The feature flag name |
+| `FallbackBehavior` | `Throw` | What to do when flag is disabled: Throw, ReturnDefault, Skip |
+| `PerUser` | `false` | Evaluate per-user instead of globally |
+
+## IFeatureFlagProvider
+
+```csharp
+public interface IFeatureFlagProvider
+{
+    ValueTask<bool> IsEnabledAsync(string featureName, CancellationToken cancellationToken = default);
+    ValueTask<bool> IsEnabledAsync(string featureName, string userId, CancellationToken cancellationToken = default);
+}
+```
+
+## In-Memory Provider
+
+For development and testing:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithFeatureFlags(ff =>
+    {
+        ff.UseInMemoryProvider()
+          .WithFeature("new-checkout", true)
+          .WithFeature("beta-search", false)
+          .WithFeature("premium-export", enabled: true);
+    });
+});
+```
+
+## Microsoft.FeatureManagement Integration
+
+Integrate with `Microsoft.FeatureManagement` for configuration-driven flags:
+
+```bash
+dotnet add package TurboMediator.FeatureFlags.FeatureManagement
+```
+
+```csharp
+// appsettings.json
+{
+  "FeatureManagement": {
+    "new-checkout": true,
+    "beta-search": {
+      "EnabledFor": [
+        {
+          "Name": "Percentage",
+          "Parameters": { "Value": 50 }
+        }
+      ]
+    }
+  }
+}
+
+// Registration
+builder.Services.AddFeatureManagement();
+builder.Services.AddMicrosoftFeatureFlags();
+
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithFeatureFlags(ff =>
+    {
+        // FeatureManagement provider is auto-detected
+    });
+});
+```
+
+## FeatureFlagOptions
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithFeatureFlags(ff =>
+    {
+        ff.UseInMemoryProvider()
+          .UseStrictMode() // or .UseLenientMode()
+          .WithUserIdProvider(() => currentUserService.GetUserId());
+    });
+});
+```
+
+| Option | Description |
+|---|---|
+| `UseStrictMode()` | Sets default fallback to `FeatureFallback.Throw` |
+| `UseLenientMode()` | Sets default fallback to `FeatureFallback.ReturnDefault` |
+| `WithUserIdProvider(Func<string?>)` | Parameterless function to get user ID |
+
+## Custom Provider
+
+```csharp
+public class LaunchDarklyProvider : IFeatureFlagProvider
+{
+    private readonly ILdClient _client;
+
+    public LaunchDarklyProvider(ILdClient client) => _client = client;
+
+    public ValueTask<bool> IsEnabledAsync(string featureName)
+    {
+        return new ValueTask<bool>(
+            _client.BoolVariation(featureName, Context.Default, false));
+    }
+
+    public ValueTask<bool> IsEnabledAsync(string featureName, string userId)
+    {
+        var context = Context.Builder(userId).Build();
+        return new ValueTask<bool>(
+            _client.BoolVariation(featureName, context, false));
+    }
+}
+```
+
+<Callout type="info">
+Feature flags are evaluated at the pipeline level, so disabled features never reach the handler. This provides a clean way to do gradual rollouts, A/B testing, and kill switches.
+</Callout>

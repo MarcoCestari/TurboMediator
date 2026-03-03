@@ -1,0 +1,212 @@
+---
+title: Recurring Jobs
+description: Configure cron-based and interval-based recurring jobs
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Cron Expression
+
+Schedule jobs using standard 5-field or 6-field (with seconds) cron expressions:
+
+```csharp
+scheduling.AddRecurringJob<MyCommand>("my-job")
+    .WithCron("0 3 * * *")           // daily at 03:00
+    .WithData(() => new MyCommand());
+
+// With seconds (6-field)
+scheduling.AddRecurringJob<PingCommand>("ping")
+    .WithCron("*/30 * * * * *")      // every 30 seconds
+    .WithData(() => new PingCommand());
+```
+
+Cron parsing is powered by [Cronos](https://github.com/HangfireIO/Cronos) (MIT, zero transitive dependencies).
+
+## Interval-Based
+
+For simpler schedules, use fixed intervals:
+
+```csharp
+scheduling.AddRecurringJob<HealthCheckCommand>("health-check")
+    .Every(TimeSpan.FromMinutes(5))
+    .WithData(() => new HealthCheckCommand());
+
+// Convenience methods
+.Hourly()    // TimeSpan.FromHours(1)
+.Daily()     // TimeSpan.FromDays(1)
+.Weekly()    // TimeSpan.FromDays(7)
+```
+
+## Timezone Support
+
+By default, cron expressions are evaluated in UTC. To use a specific timezone:
+
+```csharp
+scheduling.AddRecurringJob<DailyReportCommand>("daily-report")
+    .WithCron("0 8 * * 1-5")        // 08:00 on weekdays
+    .WithTimeZone(TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo"))
+    .WithData(() => new DailyReportCommand());
+```
+
+## SkipIfAlreadyRunning
+
+Prevent overlap when a job takes longer than its schedule interval:
+
+```csharp
+scheduling.AddRecurringJob<LongProcessCommand>("long-process")
+    .WithCron("0 * * * *")          // every hour
+    .SkipIfAlreadyRunning()          // skip if previous run still active
+    .WithData(() => new LongProcessCommand());
+```
+
+When skipped, a `JobOccurrenceRecord` with `Status = Skipped` is recorded.
+
+## Priority
+
+```csharp
+scheduling.AddRecurringJob<RebuildIndexCommand>("rebuild-index")
+    .WithCron("0 2 * * 0")          // Sundays at 02:00
+    .WithPriority(JobPriority.LongRunning)
+    .WithData(() => new RebuildIndexCommand());
+```
+
+| Priority | Behavior |
+|----------|----------|
+| `LongRunning` | Dispatched with `TaskCreationOptions.LongRunning` (dedicated thread) |
+| `High` | Metadata for ordering (processed first) |
+| `Normal` | Default |
+| `Low` | Metadata for ordering (processed last) |
+
+## [RecurringJob] Attribute
+
+As an alternative to the fluent builder, you can annotate a handler class directly with `[RecurringJob]`:
+
+```csharp
+[RecurringJob("nightly-cleanup", "0 3 * * *")]
+public class CleanupHandler : ICommandHandler<CleanupCommand, Unit>
+{
+    public ValueTask<Unit> Handle(CleanupCommand cmd, CancellationToken ct)
+    {
+        // ...
+        return Unit.ValueTask;
+    }
+}
+```
+
+The attribute signature:
+
+```csharp
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = false)]
+public sealed class RecurringJobAttribute : Attribute
+{
+    public string JobId { get; }
+    public string CronExpression { get; }
+
+    public RecurringJobAttribute(string jobId, string cronExpression) { ... }
+}
+```
+
+### Auto-Registration via Source Generator
+
+The source generator detects `[RecurringJob]` at compile time and generates a `ConfigureRecurringJobsFromAttributes()` extension method. Call it inside `WithScheduling` to auto-register all attributed handlers — **zero reflection**:
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    .WithScheduling(scheduling =>
+    {
+        scheduling.UseInMemoryStore();
+
+        // Auto-registers all [RecurringJob] handlers at compile time
+        scheduling.ConfigureRecurringJobsFromAttributes();
+
+        // You can still add builder-based jobs alongside attribute-based ones
+        scheduling.AddRecurringJob<ReportCommand>("report")
+            .WithCron("0 8 * * 1-5")
+            .WithRetry(RetryStrategy.Fixed(3, 60))
+            .WithData(() => new ReportCommand());
+    })
+);
+```
+
+<Callout type="info">
+The command type must have a **parameterless constructor** for attribute-based registration (the source generator generates `new TCommand()` as the default payload).
+</Callout>
+
+### Attribute vs Builder
+
+| Feature | `[RecurringJob]` | Builder |
+|---------|-----------------|---------|
+| Cron schedule | Yes | Yes |
+| Interval schedule | No | Yes (`Every`, `Hourly`, etc.) |
+| Retry strategy | No (default: none) | Yes (`WithRetry`) |
+| SkipIfAlreadyRunning | No (default: false) | Yes |
+| Priority | No (default: Normal) | Yes (`WithPriority`) |
+| Timezone | No (default: UTC) | Yes (`WithTimeZone`) |
+| Custom payload | No (uses `new TCommand()`) | Yes (`WithData`) |
+
+Use the attribute for simple cron jobs that need no extra configuration. Use the builder for full control.
+
+## IJobExecutionContext
+
+Handlers can inject `IJobExecutionContext` to access execution metadata:
+
+```csharp
+public class ImportHandler : ICommandHandler<ImportCommand, Unit>
+{
+    private readonly IJobExecutionContext _ctx;
+
+    public ImportHandler(IJobExecutionContext ctx, ILogger<ImportHandler> logger)
+    {
+        _ctx = ctx;
+    }
+
+    public ValueTask<Unit> Handle(ImportCommand cmd, CancellationToken ct)
+    {
+        Console.WriteLine($"Job: {_ctx.JobId}, Attempt: {_ctx.RetryCount + 1}");
+
+        if (_ctx.RetryCount >= 2)
+        {
+            // Fallback strategy on 3rd attempt
+        }
+
+        return Unit.ValueTask;
+    }
+}
+```
+
+Properties available:
+
+| Property | Description |
+|----------|-------------|
+| `JobId` | Unique job identifier |
+| `OccurrenceId` | ID of this specific execution |
+| `RetryCount` | Number of retries so far (0 on first attempt) |
+| `StartedAt` | When the occurrence started |
+| `CronExpression` | The cron expression that triggered this run |
+| `ParentOccurrenceId` | Parent ID if this is a chained child job |
+
+## SkipJobException
+
+Throw from a handler to skip the current occurrence without retry:
+
+```csharp
+throw new SkipJobException("Data already imported today");
+```
+
+The occurrence is recorded with `Status = Skipped`.
+
+## TerminateJobException
+
+Terminate execution with a specific status, bypassing retry:
+
+```csharp
+// Terminate as failed (no retry)
+throw new TerminateJobException(JobStatus.Failed, "Invalid configuration");
+
+// Terminate as cancelled
+throw new TerminateJobException(JobStatus.Cancelled, "Feature disabled");
+```
+
+<Callout type="warn">
+Regular exceptions (not Skip/Terminate) will trigger the retry strategy. If all retries are exhausted, the occurrence is recorded as `Failed`.
+</Callout>

@@ -1,0 +1,6 @@
+{
+  "title": "Pipeline",
+  "icon": "Workflow",
+  "defaultOpen": false,
+  "pages": ["behaviors", "pre-post-processors", "exception-handlers"]
+}

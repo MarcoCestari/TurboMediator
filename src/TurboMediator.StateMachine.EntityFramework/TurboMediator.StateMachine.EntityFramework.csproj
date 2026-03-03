@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackageId>TurboMediator.StateMachine.EntityFramework</PackageId>
+    <Description>Entity Framework Core transition store implementation for TurboMediator.StateMachine</Description>
+    <PackageTags>mediator;state-machine;efcore;entityframework;transitions</PackageTags>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TurboMediator.StateMachine\TurboMediator.StateMachine.csproj" />
+  </ItemGroup>
+</Project>

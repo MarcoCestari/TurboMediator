@@ -1,0 +1,219 @@
+---
+title: Handlers
+description: Creating handlers for messages in TurboMediator
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Handlers contain the business logic that processes messages. Each message type has a corresponding handler interface. TurboMediator discovers handlers automatically at compile time via the source generator.
+
+## Handler Interfaces
+
+| Handler Interface | Message Type | Return |
+|---|---|---|
+| `IRequestHandler<TRequest, TResponse>` | `IRequest<TResponse>` | `ValueTask<TResponse>` |
+| `IRequestHandler<TRequest>` | `IRequest` | `ValueTask` |
+| `ICommandHandler<TCommand, TResponse>` | `ICommand<TResponse>` | `ValueTask<TResponse>` |
+| `ICommandHandler<TCommand>` | `ICommand` | `ValueTask` |
+| `IQueryHandler<TQuery, TResponse>` | `IQuery<TResponse>` | `ValueTask<TResponse>` |
+| `INotificationHandler<TNotification>` | `INotification` | `ValueTask` |
+
+## Request Handlers
+
+```csharp
+public record PingRequest : IRequest<string>;
+
+public class PingHandler : IRequestHandler<PingRequest, string>
+{
+    public ValueTask<string> Handle(PingRequest request, CancellationToken ct)
+    {
+        return new ValueTask<string>("Pong!");
+    }
+}
+```
+
+For requests without a response:
+
+```csharp
+public record LogEventRequest(string Message) : IRequest;
+
+public class LogEventHandler : IRequestHandler<LogEventRequest>
+{
+    private readonly ILogger<LogEventHandler> _logger;
+
+    public LogEventHandler(ILogger<LogEventHandler> logger) => _logger = logger;
+
+    public ValueTask Handle(LogEventRequest request, CancellationToken ct)
+    {
+        _logger.LogInformation("Event: {Message}", request.Message);
+        return Unit.ValueTask; // or simply: return default;
+    }
+}
+```
+
+<Callout type="info">
+Void message types (`IRequest`, `ICommand`) use the `Unit` type internally. In handlers you can return `Unit.ValueTask` (explicit) or `default` (shorthand) — both are equivalent.
+</Callout>
+
+## Command Handlers
+
+```csharp
+public record CreateOrderCommand(string Product, int Quantity) : ICommand<Order>;
+
+public class CreateOrderHandler : ICommandHandler<CreateOrderCommand, Order>
+{
+    private readonly IOrderRepository _repository;
+
+    public CreateOrderHandler(IOrderRepository repository)
+    {
+        _repository = repository;
+    }
+
+    public async ValueTask<Order> Handle(CreateOrderCommand command, CancellationToken ct)
+    {
+        var order = new Order
+        {
+            Id = Guid.NewGuid(),
+            Product = command.Product,
+            Quantity = command.Quantity,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        await _repository.AddAsync(order, ct);
+        return order;
+    }
+}
+```
+
+## Query Handlers
+
+```csharp
+public record GetOrderQuery(Guid Id) : IQuery<Order?>;
+
+public class GetOrderHandler : IQueryHandler<GetOrderQuery, Order?>
+{
+    private readonly IOrderRepository _repository;
+
+    public GetOrderHandler(IOrderRepository repository)
+    {
+        _repository = repository;
+    }
+
+    public async ValueTask<Order?> Handle(GetOrderQuery query, CancellationToken ct)
+    {
+        return await _repository.FindByIdAsync(query.Id, ct);
+    }
+}
+```
+
+## Notification Handlers
+
+Notifications support **multiple handlers**. All registered handlers are invoked when a notification is published:
+
+```csharp
+public record OrderPlacedNotification(Guid OrderId, string CustomerEmail) : INotification;
+
+// Handler 1: Send email
+public class OrderEmailHandler : INotificationHandler<OrderPlacedNotification>
+{
+    private readonly IEmailService _emailService;
+
+    public OrderEmailHandler(IEmailService emailService) => _emailService = emailService;
+
+    public async ValueTask Handle(OrderPlacedNotification notification, CancellationToken ct)
+    {
+        await _emailService.SendOrderConfirmation(notification.CustomerEmail, notification.OrderId);
+    }
+}
+
+// Handler 2: Update analytics
+public class OrderAnalyticsHandler : INotificationHandler<OrderPlacedNotification>
+{
+    private readonly IAnalyticsService _analytics;
+
+    public OrderAnalyticsHandler(IAnalyticsService analytics) => _analytics = analytics;
+
+    public async ValueTask Handle(OrderPlacedNotification notification, CancellationToken ct)
+    {
+        await _analytics.TrackOrderPlaced(notification.OrderId);
+    }
+}
+
+// Handler 3: Update inventory
+public class InventoryUpdateHandler : INotificationHandler<OrderPlacedNotification>
+{
+    public ValueTask Handle(OrderPlacedNotification notification, CancellationToken ct)
+    {
+        Console.WriteLine($"Updating inventory for order {notification.OrderId}");
+        return default;
+    }
+}
+```
+
+## Dependency Injection
+
+Handlers support constructor injection. All dependencies are resolved from the DI container:
+
+```csharp
+public class CreateUserHandler : ICommandHandler<CreateUserCommand, User>
+{
+    private readonly IUserRepository _repository;
+    private readonly ILogger<CreateUserHandler> _logger;
+    private readonly IMediator _mediator;
+
+    public CreateUserHandler(
+        IUserRepository repository,
+        ILogger<CreateUserHandler> logger,
+        IMediator mediator)
+    {
+        _repository = repository;
+        _logger = logger;
+        _mediator = mediator;
+    }
+
+    public async ValueTask<User> Handle(CreateUserCommand command, CancellationToken ct)
+    {
+        _logger.LogInformation("Creating user {Name}", command.Name);
+
+        var user = new User(Guid.NewGuid(), command.Name, command.Email);
+        await _repository.AddAsync(user, ct);
+
+        // Publish notification from within a handler
+        await _mediator.Publish(new UserCreatedNotification(user.Id, user.Email), ct);
+
+        return user;
+    }
+}
+```
+
+<Callout type="warn">
+Each message (except notifications) must have **exactly one** handler. The source generator will emit:
+- `TURBO001` warning if no handler is found
+- `TURBO002` error if multiple handlers exist for the same message
+- `TURBO008` error if the handler is not public
+</Callout>
+
+## Handler Lifetime
+
+By default, handlers are registered as **scoped** services — a new instance is created per request/scope. This is the safe default because handlers often inject scoped dependencies like `DbContext`, `ITenantContext`, or `HttpContext`.
+
+```csharp
+// Default — Scoped (recommended for most apps)
+builder.Services.AddTurboMediator();
+```
+
+You can change the lifetime if your handlers are stateless and don't inject scoped services:
+
+```csharp
+// Singleton — reuses handler instances across all requests
+// ⚠️ Only safe when handlers DON'T inject scoped services (DbContext, ITenantContext, etc.)
+builder.Services.AddTurboMediator(ServiceLifetime.Singleton);
+```
+
+<Callout type="warn">
+If handlers inject **scoped services** (e.g. EF Core `DbContext`, `ITenantContext`, `IHttpContextAccessor`, or any service registered with `AddScoped`), the lifetime **must** be `Scoped` (the default). Using `Singleton` will cause a runtime `InvalidOperationException`: *"Cannot consume scoped service from singleton"*.
+</Callout>
+
+<Callout type="info">
+The `IMediator` instance itself is stateless — it resolves handlers on-demand from the DI container. The `lifetime` parameter controls the registration of **both** the mediator and all handlers.
+</Callout>

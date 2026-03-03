@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Package Info -->
+    <PackageId>TurboMediator.FeatureFlags.FeatureManagement</PackageId>
+    <Description>Microsoft.FeatureManagement integration for TurboMediator feature flags</Description>
+    <PackageTags>mediator;feature-flags;feature-management;asp.net-core</PackageTags>
+
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.FeatureManagement" Version="3.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TurboMediator.FeatureFlags\TurboMediator.FeatureFlags.csproj" />
+  </ItemGroup>
+
+</Project>

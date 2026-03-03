@@ -1,0 +1,102 @@
+---
+title: Entity Framework Core
+description: EF Core implementations for transactions, outbox, inbox, and audit stores
+---
+
+The `TurboMediator.Persistence.EF` package provides Entity Framework Core implementations for the persistence abstractions.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Persistence.EF
+```
+
+## Provided Implementations
+
+| Abstraction | EF Core Implementation |
+|---|---|
+| `ITransactionManager` | `EfCoreTransactionManager` |
+| `IOutboxStore` | `EfCoreOutboxStore` |
+| `IInboxStore` | `EfCoreInboxStore` |
+| `IAuditStore` | `EfCoreAuditStore` |
+
+## Registration
+
+### All at once
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.UseEntityFramework();
+    // Registers all three EF Core implementations
+});
+
+// Or using the convenience method
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithEntityFramework();
+});
+```
+
+### Individual registration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.UseEfCoreTransactions();
+    m.UseEfCoreOutboxStore();
+    m.UseEfCoreInboxStore();
+    m.UseEfCoreAuditStore();
+});
+```
+
+## DbContext Configuration
+
+Your `DbContext` needs to include the entity configurations for outbox and audit:
+
+```csharp
+public class AppDbContext : DbContext
+{
+    public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+    public DbSet<InboxMessage> InboxMessages => Set<InboxMessage>();
+    public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        // Apply outbox and audit entity configurations
+        // provided by the package
+        base.OnModelCreating(modelBuilder);
+    }
+}
+```
+
+## Complete Setup Example
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+
+// Add EF Core
+builder.Services.AddDbContext<AppDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+
+// Add TurboMediator with EF Core persistence
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithEntityFramework();
+    m.WithTransactionForCommands();
+    m.WithOutbox();
+    m.WithInbox();
+    m.WithAuditForAll();
+});
+
+var app = builder.Build();
+```
+
+## Migration
+
+After setup, create a migration to add the outbox, inbox, and audit tables:
+
+```bash
+dotnet ef migrations add AddMediatorPersistence
+dotnet ef database update
+```

@@ -1,0 +1,97 @@
+---
+title: Structured Logging
+description: Rich structured logging with sensitive property masking
+---
+
+The structured logging behavior provides detailed, structured logs for every mediator operation with support for sensitive property masking and slow operation detection.
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithStructuredLogging<IMessage, object>(options =>
+    {
+        options.IncludeMessageType = true;
+        options.IncludeHandlerName = true;
+        options.IncludeDuration = true;
+        options.IncludeCorrelationId = true;
+        options.IncludeMessageProperties = true;
+        options.IncludeResponse = false;
+        options.SlowOperationThreshold = TimeSpan.FromSeconds(1);
+        options.SensitivePropertyNames = new HashSet<string>
+        {
+            "Password", "CreditCard", "SSN", "Token"
+        };
+    });
+});
+```
+
+## StructuredLoggingOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `IncludeMessageType` | `true` | Log the message type name |
+| `IncludeHandlerName` | `true` | Log the handler class name |
+| `IncludeDuration` | `true` | Log execution duration |
+| `IncludeCorrelationId` | `true` | Log correlation ID |
+| `IncludeMessageProperties` | `false` | Log message property values |
+| `IncludeResponse` | `false` | Log response value |
+| `SensitivePropertyNames` | Password, Secret, Token, ApiKey, ConnectionString, CreditCard, CardNumber, Cvv, Pin, Ssn, SocialSecurityNumber | Properties to mask in logs |
+| `SuccessLogLevel` | `Information` | Log level for successes |
+| `ErrorLogLevel` | `Error` | Log level for errors |
+| `SlowOperationLogLevel` | `Warning` | Log level for slow operations |
+| `SlowOperationThreshold` | 1 second | Duration to be considered slow |
+| `ShouldLog` | `null` | Predicate to skip logging for certain messages |
+
+## Sensitive Property Masking
+
+Properties listed in `SensitivePropertyNames` are replaced with `***REDACTED***` in log output:
+
+```csharp
+// Configuration
+options.SensitivePropertyNames = new HashSet<string> { "Password", "Token" };
+
+// Message
+public record LoginCommand(string Username, string Password) : ICommand<AuthResult>;
+
+// Log output:
+// Handling LoginCommand: { Username = "alice", Password = "***REDACTED***" }
+```
+
+## Slow Operation Detection
+
+Operations exceeding `SlowOperationThreshold` are logged at a higher level:
+
+```
+[Warning] Slow handler detected: GenerateReportQuery took 2345ms (threshold: 1000ms)
+```
+
+## Log Output Examples
+
+```
+[Information] Handling CreateUserCommand:
+  MessageType: CreateUserCommand
+  CorrelationId: abc-123
+  Properties: { Name = "Alice", Email = "alice@example.com" }
+
+[Information] Handled CreateUserCommand in 45ms
+  HandlerName: CreateUserHandler
+  Duration: 45ms
+
+[Error] Error handling CreateUserCommand after 12ms
+  HandlerName: CreateUserHandler
+  Exception: System.InvalidOperationException: Email already exists
+```
+
+## Conditional Logging
+
+Skip logging for specific message types:
+
+```csharp
+options.ShouldLog = (messageType) =>
+{
+    // Don't log health check queries
+    return messageType != typeof(HealthCheckQuery);
+};
+```

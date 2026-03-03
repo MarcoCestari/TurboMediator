@@ -1,0 +1,89 @@
+---
+title: Correlation ID
+description: Propagating correlation IDs across the pipeline for distributed tracing
+---
+
+The correlation ID behavior ensures every operation has a unique identifier that flows through the entire pipeline and can be propagated to downstream services.
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithCorrelationId<IMessage, object>(options =>
+    {
+        options.HeaderName = "X-Correlation-ID";
+        options.GenerateIfMissing = true;
+        options.AddToActivityBaggage = true;
+        options.AddToLogScope = true;
+        options.PropagateToHttpClient = true;
+    });
+
+    m.WithMediatorContext(); // Required for context storage
+});
+```
+
+## CorrelationOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `HeaderName` | `"X-Correlation-ID"` | HTTP header name |
+| `GenerateIfMissing` | `true` | Auto-generate if not provided |
+| `CorrelationIdGenerator` | `Guid.NewGuid()` | Custom ID generator function |
+| `AddToActivityBaggage` | `true` | Add to `Activity.Current.Baggage` |
+| `AddToLogScope` | `true` | Add to `ILogger` scope |
+| `PropagateToHttpClient` | `true` | Add to outgoing HTTP headers |
+| `CorrelationIdProvider` | `null` | Custom provider to read existing IDs |
+
+## Reading the Correlation ID
+
+Access through `IMediatorContextAccessor`:
+
+```csharp
+public class MyHandler : ICommandHandler<MyCommand, MyResult>
+{
+    private readonly IMediatorContextAccessor _contextAccessor;
+    private readonly ILogger<MyHandler> _logger;
+
+    public MyHandler(
+        IMediatorContextAccessor contextAccessor,
+        ILogger<MyHandler> logger)
+    {
+        _contextAccessor = contextAccessor;
+        _logger = logger;
+    }
+
+    public async ValueTask<MyResult> Handle(MyCommand command, CancellationToken ct)
+    {
+        var correlationId = _contextAccessor.Context?.CorrelationId;
+        _logger.LogInformation("Processing with correlation ID: {CorrelationId}", correlationId);
+
+        // The correlation ID is automatically included in log scope
+        // and Activity baggage
+        return new MyResult();
+    }
+}
+```
+
+## Propagation to Downstream Services
+
+When `PropagateToHttpClient` is enabled, the correlation ID is automatically added to outgoing HTTP requests via the configured header:
+
+```csharp
+// The correlation ID flows automatically to downstream HTTP calls
+public class OrderHandler : ICommandHandler<CreateOrderCommand, Order>
+{
+    private readonly HttpClient _httpClient;
+
+    public OrderHandler(HttpClient httpClient) => _httpClient = httpClient;
+
+    public async ValueTask<Order> Handle(CreateOrderCommand cmd, CancellationToken ct)
+    {
+        // X-Correlation-ID header is automatically added
+        var inventory = await _httpClient.GetFromJsonAsync<Inventory>(
+            $"/api/inventory/{cmd.ProductId}", ct);
+
+        return new Order { /* ... */ };
+    }
+}
+```

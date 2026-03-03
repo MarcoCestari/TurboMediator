@@ -1,0 +1,323 @@
+---
+title: Why TurboMediator?
+description: Why the Mediator pattern still matters, when to use it, and how it helps you build scalable .NET applications.
+icon: Lightbulb
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## The Elephant in the Room
+
+In early 2025, within days of each other, both MediatR and MassTransit announced their transition to commercial licensing models.
+
+The two most widely-used .NET messaging libraries going paid almost simultaneously sent shockwaves through the community. A wave of blog posts and conference talks argued you should **stop using the Mediator pattern altogether**.
+
+The most common reactions are:
+
+- *"ASP.NET Core already has middleware and filters."*
+- *"It's just an unnecessary abstraction over method calls."*
+- *"You can call your services directly."*
+
+These arguments are not wrong — they're just **incomplete**. They focus on a narrow slice of .NET development (small Web API projects) and ignore the reality of large, complex systems where the pattern truly shines.
+
+Let's understand **why** this perception exists before we break down the specific arguments.
+
+---
+
+## Why People Don't See the Value
+
+The dismissal of the Mediator pattern isn't random — it follows a predictable pattern rooted in how the community was exposed to it.
+
+### 1. Every tutorial shows a TODO app
+
+The vast majority of MediatR tutorials demonstrate the pattern with a trivial CRUD API: create a `CreateTodoCommand`, wire up a handler, and... that's it. In that context, the pattern genuinely **is** unnecessary overhead. You added an interface, a handler class, and a pipeline — to call `_db.Add(todo)`.
+
+The problem isn't the pattern. The problem is that **no one shows the pipeline**. The real power of the Mediator pattern — behaviors for validation, logging, caching, transactions, retry policies, telemetry — is almost never demonstrated in introductory content. People form their opinion based on the simplest possible example and never see the 90% of value that comes from the pipeline.
+
+### 2. Paid licensing triggered a backlash against the pattern itself
+
+When MediatR and MassTransit announced commercial licenses within days of each other in April 2025, the community reaction wasn't just "let's find an alternative." A significant portion of developers took it as an opportunity to argue the patterns themselves were unnecessary. The reasoning went: *"If I have to pay for it, maybe I never needed it."*
+
+The simultaneity made the backlash louder than it would have been otherwise — two separate communities reacting at the same time, feeding the same narrative.
+
+But this conflates the **licensing model of specific libraries** with the **usefulness of architectural patterns**. The Mediator pattern and event-driven messaging existed long before these libraries and will exist long after. Licensing decisions are business decisions — they say nothing about whether a pattern solves a real problem.
+
+### 3. People generalize from their own context
+
+A developer building a 5-endpoint API with no background workers, no event consumers, and no complex cross-cutting concerns will correctly conclude that the pattern adds no value **for them**. The mistake is assuming that experience applies universally.
+
+In large codebases with multiple entry points, dozens of developers, and strict requirements around auditability, resilience, and consistency — the pattern pays for itself many times over. But you can't see that from the outside looking in.
+
+### 4. The "just call the service directly" trap
+
+Direct service injection feels simpler because the complexity is **hidden**, not absent. In a small project, `controller → service → repository` works fine. But as the application grows, each service method gradually accumulates validation, logging, authorization checks, caching logic, and error handling — scattered inconsistently across the codebase.
+
+The Mediator pattern makes this complexity **explicit and centralized**. It feels like more ceremony upfront because it forces you to name your operations and define your pipeline. That's not a weakness — it's the entire point.
+
+### 5. Confusion between the pattern and the library
+
+Many critiques of "the Mediator pattern" are actually critiques of a specific library's API or implementation choices. Service location concerns, runtime reflection, dictionary lookups — these are **implementation details**, not properties of the pattern itself.
+
+A source-generated mediator (like TurboMediator) has none of these issues. The dispatch is a compile-time `switch` expression. There's no service locator. There's no reflection. Dismissing the pattern because of how one library implemented it is like dismissing dependency injection because one container was slow.
+
+---
+
+Now let's address the specific technical arguments.
+
+---
+
+## "ASP.NET middleware is enough"
+
+ASP.NET middleware and endpoint filters are powerful — **for HTTP request pipelines**. But what about:
+
+- **Background workers** (`IHostedService`, `BackgroundService`) processing messages from queues?
+- **Scheduled jobs** (Hangfire, Quartz.NET, custom cron jobs)?
+- **gRPC services**?
+- **SignalR hubs**?
+- **Console applications** and CLI tools?
+- **Event-driven architectures** where messages flow between bounded contexts?
+
+In a real-world enterprise system, your business logic doesn't live exclusively behind HTTP endpoints. You often have **multiple entry points** — an API, several workers, scheduled tasks, event consumers — all executing the **same business operations**.
+
+ASP.NET middleware **only covers HTTP**. The Mediator pipeline covers **everything**.
+
+```
+┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐
+│   Web API   │  │   Worker    │  │  Cron Job   │  │  gRPC/Hub   │
+└──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘
+       │                │                │                │
+       └────────────────┴────────────────┴────────────────┘
+                                │
+                    ┌───────────▼───────────┐
+                    │   Mediator Pipeline   │
+                    │  ┌─────────────────┐  │
+                    │  │   Validation    │  │
+                    │  │   Logging       │  │
+                    │  │   Authorization │  │
+                    │  │   Caching       │  │
+                    │  │   Transactions  │  │
+                    │  │   Retry/CB      │  │
+                    │  │   Telemetry     │  │
+                    │  └─────────────────┘  │
+                    │         │             │
+                    │  ┌──────▼──────┐      │
+                    │  │   Handler   │      │
+                    │  └─────────────┘      │
+                    └───────────────────────┘
+```
+
+When you have a `CreateOrderCommand`, it doesn't matter if it was triggered by an API endpoint, a message from RabbitMQ, or a scheduled job. The **same pipeline behaviors** (validation, authorization, logging, transactions, telemetry) are applied consistently.
+
+Without a mediator, you'd need to **duplicate** those cross-cutting concerns across every entry point — or build your own pipeline abstraction, which is exactly what a mediator is.
+
+---
+
+## "It's just an extra layer of indirection"
+
+Yes. That's the point.
+
+Every useful pattern in software adds a layer of indirection in exchange for something valuable. Dependency injection is indirection. Interfaces are indirection. The question is: **what do you get in return?**
+
+With the Mediator pattern, you get:
+
+### 1. Decoupled Architecture
+
+Your controllers, workers, and jobs don't need to know which service handles what. They send a message and receive a response. This makes your code **easier to refactor**, **easier to test**, and **easier to reason about**.
+
+```csharp
+// Controller doesn't know or care who handles this
+public async Task<IActionResult> CreateOrder([FromBody] CreateOrderRequest dto)
+{
+    var result = await mediator.Send(new CreateOrderCommand(dto.CustomerId, dto.Items));
+    return Ok(result);
+}
+
+// Worker doesn't know or care who handles this
+public async Task ProcessMessage(QueueMessage msg)
+{
+    var command = JsonSerializer.Deserialize<CreateOrderCommand>(msg.Body);
+    await mediator.Send(command);
+}
+```
+
+Both entry points share the **same command**, the **same handler**, and the **same pipeline** — zero duplication.
+
+### 2. Uniform Cross-Cutting Concerns
+
+Without a mediator, here's what adding logging to every operation looks like:
+
+```csharp
+// ❌ Without mediator — you repeat this in every service method
+public async Task<Order> CreateOrder(CreateOrderCommand command)
+{
+    _logger.LogInformation("Creating order for {CustomerId}", command.CustomerId);
+    var sw = Stopwatch.StartNew();
+    try
+    {
+        // validate...
+        // authorize...
+        // actual logic...
+        _logger.LogInformation("Order created in {Elapsed}ms", sw.ElapsedMilliseconds);
+        return order;
+    }
+    catch (Exception ex)
+    {
+        _logger.LogError(ex, "Failed to create order");
+        throw;
+    }
+}
+```
+
+With a mediator pipeline, you write it **once**:
+
+```csharp
+// ✅ With mediator — write once, apply to every operation
+public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, TResponse>
+    where TRequest : IMessage
+{
+    public async ValueTask<TResponse> Handle(
+        TRequest request, MessageHandlerDelegate<TResponse> next, CancellationToken ct)
+    {
+        _logger.LogInformation("Handling {Request}", typeof(TRequest).Name);
+        var sw = Stopwatch.StartNew();
+        var response = await next();
+        _logger.LogInformation("{Request} handled in {Elapsed}ms",
+            typeof(TRequest).Name, sw.ElapsedMilliseconds);
+        return response;
+    }
+}
+```
+
+This applies **automatically** to every command, query, and request in your system. No manual wiring. No forgetting to add it to that new endpoint.
+
+### 3. Consistent CQRS Semantics
+
+The Mediator pattern naturally maps to CQRS. Commands mutate state. Queries read state. Notifications broadcast events. This vocabulary becomes a **shared language** across your team:
+
+- Seeing `ICommand<T>` → you know it writes data
+- Seeing `IQuery<T>` → you know it reads data
+- Seeing `INotification` → you know it's fire-and-forget
+
+This isn't just ceremony — it's **enforced architecture** that prevents common mistakes like commands that secretly read data or queries that mutate state.
+
+### 4. Testability
+
+Handlers are simple classes with a single `Handle` method. They're trivial to unit test in isolation — no HTTP context, no middleware chain, no controller setup:
+
+```csharp
+[Fact]
+public async Task CreateOrder_ShouldReturnOrder()
+{
+    var handler = new CreateOrderHandler(mockRepo);
+    var result = await handler.Handle(
+        new CreateOrderCommand("customer-1", items),
+        CancellationToken.None);
+
+    Assert.NotNull(result);
+}
+```
+
+Pipeline behaviors can also be tested independently, ensuring your cross-cutting concerns work correctly without spinning up the entire application.
+
+---
+
+## When Should You Use It?
+
+### Strongly Recommended
+
+| Scenario | Why |
+|----------|-----|
+| **Multiple entry points** (API + Workers + Jobs) | Shared pipeline and handlers eliminate duplication |
+| **Complex cross-cutting concerns** (auth, validation, caching, retry, transactions) | Pipeline behaviors apply them consistently |
+| **Large teams** working on the same codebase | Clear message contracts reduce coordination overhead |
+| **CQRS / Event-driven architectures** | Natural fit for command/query/event separation |
+| **Microservices** with shared business logic | Handlers are portable across service boundaries |
+| **Applications requiring auditability** | Pipeline behaviors can intercept and log every operation |
+
+### Consider It
+
+| Scenario | Why |
+|----------|-----|
+| **Medium-sized Web APIs** with growing complexity | Establishes patterns early before the codebase becomes hard to refactor |
+| **Applications with strict testing requirements** | Handler isolation makes unit testing straightforward |
+| **Teams adopting Clean/Hexagonal Architecture** | Mediator fits naturally as the application layer boundary |
+
+### Probably Not Needed
+
+| Scenario | Why |
+|----------|-----|
+| **Small CRUD APIs** with 5-10 endpoints | The overhead of the pattern exceeds its benefits |
+| **Prototypes and MVPs** | Speed of development matters more than architecture |
+| **Simple scripts or utilities** | Direct method calls are simpler and sufficient |
+
+<Callout type="info">
+Even in smaller projects, TurboMediator's source-generated approach adds **near-zero runtime overhead** — so the cost of adopting it is primarily the learning curve, not performance.
+</Callout>
+
+---
+
+## What About the "Service Class" Approach?
+
+A common alternative is injecting service classes directly:
+
+```csharp
+public class OrderController(IOrderService orderService)
+{
+    public async Task<IActionResult> Create(CreateOrderDto dto)
+        => Ok(await orderService.CreateOrder(dto));
+}
+```
+
+This works fine at small scale. But as your application grows:
+
+- **Service classes accumulate methods** and become god objects.
+- **Cross-cutting concerns are scattered** across services or duplicated.
+- **Adding a new concern** (e.g., caching) means touching every service method.
+- **Different entry points** (API vs. Worker) need to independently wire up the same logic.
+
+The Mediator pattern avoids all of these by giving you **one handler per operation** and a **single pipeline** for concerns.
+
+| | Service Classes | Mediator Pattern |
+|--|----------------|-----------------|
+| Adding validation | Modify each service method | Add one pipeline behavior |
+| Adding logging | Modify each service method | Add one pipeline behavior |
+| Adding caching | Modify each service method | Add one pipeline behavior |
+| New entry point (Worker) | Wire up services + recreate middleware | Just send the same message |
+| New team member onboarding | "Read these 15 service classes" | "Commands go here, queries go there" |
+
+---
+
+## The Real Cost of Not Using It
+
+In large applications, the cost of **not** using a mediator becomes visible over time:
+
+1. **Inconsistency** — Some operations have logging, some don't. Some have validation, some don't. New features ship without proper cross-cutting concerns because developers forget or don't know they exist.
+
+2. **Duplication** — The same authorization check is written in three places. The same caching logic is copy-pasted. When a bug is found, only one copy gets fixed.
+
+3. **Fragile refactoring** — Changing how a business operation works requires updating the controller, the worker, the job, and every test that sets up the full dependency chain.
+
+4. **Difficult onboarding** — New developers have no clear pattern to follow. Every service does things slightly differently. Code reviews become debates about where logic should live.
+
+With a mediator, these problems are **structurally prevented**. The pipeline enforces consistency, handlers enforce single responsibility, and message contracts enforce clear boundaries.
+
+---
+
+## Why TurboMediator Specifically?
+
+If you're convinced the pattern is valuable, why choose TurboMediator over alternatives?
+
+- **Free. Always.** — MIT-licensed with no revenue thresholds, team size limits, or commercial restrictions. No license key to deploy. No pricing page to check before upgrading.
+- **Source-generated dispatch** — No reflection, no `Dictionary<Type, Handler>` lookups. A `switch` expression routes messages at compile time.
+- **Compile-time safety** — Forgot to create a handler? Missing a pipeline registration? The compiler tells you immediately — not a runtime exception in production.
+- **Native AOT ready** — No runtime code generation means full compatibility with `PublishAot`.
+- **20+ optional packages** — Validation, resilience, observability, persistence, sagas, rate limiting, feature flags — all built for the TurboMediator pipeline.
+- **Zero lock-in** — Your handlers are plain classes. Your messages are plain records. Migrating away (if you ever want to) means removing the `ICommand<T>` interface and calling the handler directly.
+
+---
+
+## Summary
+
+The Mediator pattern is not about adding indirection for the sake of it. It's about giving your application a **central nervous system** — a single pipeline through which all operations flow, where cross-cutting concerns are applied **once** and **consistently**, regardless of whether the trigger is an HTTP request, a queue message, or a scheduled job.
+
+If your application has more than one entry point, complex cross-cutting concerns, or a growing team — the Mediator pattern isn't just nice to have. It's a **force multiplier**.

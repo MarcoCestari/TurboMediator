@@ -1,0 +1,117 @@
+---
+title: Scheduling
+description: Cron jobs and recurring job scheduling for TurboMediator
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+`TurboMediator.Scheduling` adds native **cron jobs and recurring job scheduling** to TurboMediator. The core idea: **a job is an `ICommand`. An `ICommand` has a pipeline. Scheduling is just defining when `IMediator.Send()` gets called.**
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Scheduling
+```
+
+For EF Core persistence:
+
+```bash
+dotnet add package TurboMediator.Scheduling.EntityFramework
+```
+
+## Key Features
+
+- **Cron expressions** (5-field and 6-field with seconds) via [Cronos](https://github.com/HangfireIO/Cronos)
+- **Interval-based** scheduling (Every, Hourly, Daily, Weekly)
+- **Retry with custom intervals** per attempt
+- **SkipIfAlreadyRunning** — anti-overlap protection
+- **Pause / Resume / TriggerNow** runtime controls
+- **Job occurrence history** — full execution log
+- **Priority hints** including `LongRunning` (dedicated thread)
+- **IJobExecutionContext** — rich context injected into handlers
+- **SkipJobException / TerminateJobException** — control flow exceptions
+- **Timezone support** for cron evaluation
+- **Zero reflection** — typed dispatch via source-generator-friendly registry
+
+## Quick Start
+
+```csharp
+// Define a command (same as any other TurboMediator command)
+public record CleanupExpiredTokensCommand() : ICommand<Unit>;
+
+public class CleanupHandler : ICommandHandler<CleanupExpiredTokensCommand, Unit>
+{
+    public ValueTask<Unit> Handle(CleanupExpiredTokensCommand command, CancellationToken ct)
+    {
+        // cleanup logic...
+        return Unit.ValueTask;
+    }
+}
+
+// Register in Program.cs
+builder.Services.AddTurboMediator(m => m
+    .WithScheduling(scheduling =>
+    {
+        scheduling.UseInMemoryStore();
+
+        scheduling.AddRecurringJob<CleanupExpiredTokensCommand>("cleanup-tokens")
+            .WithCron("0 3 * * *")          // daily at 03:00 UTC
+            .WithRetry(RetryStrategy.Fixed(2, 60))
+            .WithData(() => new CleanupExpiredTokensCommand());
+    })
+);
+```
+
+That's it. The `RecurringJobProcessor` background service starts automatically and dispatches due jobs through the full mediator pipeline.
+
+<Callout type="info">
+Your handlers don't need to know they're being called by a scheduler. They receive the same command, go through the same pipeline behaviors (validation, resilience, observability), and return the same response.
+</Callout>
+
+## Architecture
+
+```
+┌─────────────────────────────────────┐
+│          SchedulingBuilder          │  ← Fluent config at startup
+│  AddRecurringJob / WithCron / Every │
+└──────────────┬──────────────────────┘
+               │ seeds
+               ▼
+┌─────────────────────────────────────┐
+│           IJobStore                 │  ← InMemory or EF Core
+│  RecurringJobRecord + Occurrences   │
+└──────────────┬──────────────────────┘
+               │ polls
+               ▼
+┌─────────────────────────────────────┐
+│      RecurringJobProcessor          │  ← BackgroundService
+│  (PeriodicTimer, default 10s)       │
+└──────────────┬──────────────────────┘
+               │ dispatches (zero reflection)
+               ▼
+┌─────────────────────────────────────┐
+│      IMediator.Send(command)        │  ← Full pipeline
+│  Validation → Resilience → Handler  │
+└─────────────────────────────────────┘
+```
+
+## Runtime Management
+
+Inject `IJobScheduler` to manage jobs at runtime:
+
+```csharp
+app.MapPost("/api/jobs/{jobId}/pause", async (string jobId, IJobScheduler scheduler) =>
+{
+    await scheduler.PauseJobAsync(jobId);
+    return Results.Ok();
+});
+
+app.MapPost("/api/jobs/{jobId}/trigger", async (string jobId, IJobScheduler scheduler) =>
+{
+    await scheduler.TriggerNowAsync(jobId);
+    return Results.Accepted();
+});
+
+// Query execution history
+var history = await scheduler.GetOccurrencesAsync("cleanup-tokens", limit: 20);
+```

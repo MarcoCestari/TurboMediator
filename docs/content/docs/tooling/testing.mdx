@@ -1,0 +1,319 @@
+---
+title: Testing
+description: Testing utilities, fakes, and helpers for TurboMediator
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The testing package provides comprehensive tools for unit testing handlers, behaviors, and mediator interactions.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Testing
+```
+
+## FakeMediator
+
+An in-memory fake `IMediator` for isolated unit tests:
+
+```csharp
+var mediator = new FakeMediator();
+
+// Setup responses
+mediator.Setup<CreateUserCommand, User>(cmd =>
+    new User(Guid.NewGuid(), cmd.Name, cmd.Email));
+
+mediator.SetupQuery<GetUserQuery, User?>(query =>
+    new User(query.Id, "Test User", "test@example.com"));
+
+// Setup exceptions
+mediator.SetupException<DeleteUserCommand>(
+    new InvalidOperationException("User not found"));
+
+// Use in tests
+var user = await mediator.Send(new CreateUserCommand("Alice", "alice@example.com"));
+Assert.Equal("Alice", user.Name);
+```
+
+### Verification
+
+```csharp
+// Verify a command was sent
+mediator.Verify<CreateUserCommand>(
+    cmd => cmd.Name == "Alice",
+    Times.Once());
+
+// Verify a query was sent
+mediator.VerifyQuery<GetUserQuery>(
+    q => q.Id == expectedId,
+    Times.Once());
+
+// Verify a notification was published
+mediator.VerifyPublished<UserCreatedNotification>(
+    n => n.Email == "alice@example.com",
+    Times.Once());
+
+// Verify exact count
+mediator.Verify<CreateUserCommand>(Times.Exactly(2));
+
+// Verify never sent
+mediator.Verify<DeleteUserCommand>(Times.Never());
+```
+
+### Inspection
+
+```csharp
+// Get all sent messages of a type
+var commands = mediator.GetSentMessages<CreateUserCommand>();
+Assert.Single(commands);
+
+// Get all published notifications
+var notifications = mediator.GetPublishedNotifications<UserCreatedNotification>();
+Assert.Equal(2, notifications.Count);
+```
+
+## Times
+
+```csharp
+Times.Never()          // Exactly 0
+Times.Once()           // Exactly 1
+Times.Exactly(3)       // Exactly 3
+Times.AtLeastOnce()    // 1 or more
+Times.AtLeast(2)       // 2 or more
+Times.AtMost(5)        // 5 or fewer
+Times.Between(2, 5)    // Between 2 and 5
+```
+
+## RecordingMediator
+
+Wraps a **real mediator** and records all interactions:
+
+```csharp
+var services = new ServiceCollection();
+services.AddTurboMediator();
+var provider = services.BuildServiceProvider();
+
+var realMediator = provider.GetRequiredService<IMediator>();
+var recording = new RecordingMediator(realMediator);
+
+// Use normally
+await recording.Send(new CreateUserCommand("Alice", "alice@example.com"));
+await recording.Publish(new UserCreatedNotification(userId, "alice@example.com"));
+
+// Inspect records
+Assert.Equal(1, recording.Commands.Count());
+Assert.Equal(1, recording.Notifications.Count());
+
+// Detailed record inspection
+var record = recording.Records.First();
+Assert.Equal(MessageKind.Command, record.MessageKind);
+Assert.True(record.IsSuccess);
+Assert.True(record.Duration < TimeSpan.FromSeconds(1));
+```
+
+### MessageRecord
+
+```csharp
+public class MessageRecord
+{
+    public object Message { get; }
+    public MessageKind MessageKind { get; }
+    public DateTime SentAt { get; }
+    public DateTime? CompletedAt { get; }
+    public object? Response { get; }
+    public Exception? Exception { get; }
+    public bool IsSuccess { get; }
+    public TimeSpan? Duration { get; }
+}
+
+public enum MessageKind
+{
+    Command, Query, Request, Notification,
+    StreamRequest, StreamCommand, StreamQuery
+}
+```
+
+### Filtering Extensions
+
+```csharp
+var failedCommands = recording.Records
+    .WhereMessage<CreateUserCommand>()
+    .Failed()
+    .ToList();
+
+var slowQueries = recording.Records
+    .WhereMessage<GetUserQuery>(q => q.Id == specificId)
+    .Successful()
+    .Where(r => r.Duration > TimeSpan.FromSeconds(1))
+    .ToList();
+```
+
+## Handler Test Base Classes
+
+Abstract base classes for isolated handler testing:
+
+### Request Handler Test
+
+```csharp
+public class PingHandlerTests
+    : RequestHandlerTestBase<PingHandler, PingRequest, string>
+{
+    protected override PingHandler CreateHandler()
+    {
+        return new PingHandler();
+    }
+
+    [Fact]
+    public async Task Should_Return_Pong()
+    {
+        var result = await Handle(new PingRequest());
+        Assert.Equal("Pong!", result);
+    }
+}
+```
+
+### Command Handler Test
+
+```csharp
+public class CreateUserHandlerTests
+    : CommandHandlerTestBase<CreateUserHandler, CreateUserCommand, User>
+{
+    private readonly Mock<IUserRepository> _repoMock = new();
+
+    protected override CreateUserHandler CreateHandler()
+    {
+        return new CreateUserHandler(_repoMock.Object);
+    }
+
+    [Fact]
+    public async Task Should_Create_User()
+    {
+        var result = await Handle(new CreateUserCommand("Alice", "alice@example.com"));
+
+        Assert.Equal("Alice", result.Name);
+        _repoMock.Verify(r => r.AddAsync(It.IsAny<User>(), It.IsAny<CancellationToken>()));
+    }
+}
+```
+
+### Query Handler Test
+
+```csharp
+public class GetUserHandlerTests
+    : QueryHandlerTestBase<GetUserHandler, GetUserQuery, User?>
+{
+    private readonly Mock<IUserRepository> _repoMock = new();
+
+    protected override GetUserHandler CreateHandler()
+    {
+        return new GetUserHandler(_repoMock.Object);
+    }
+
+    [Fact]
+    public async Task Should_Return_User()
+    {
+        var userId = Guid.NewGuid();
+        _repoMock.Setup(r => r.FindByIdAsync(userId, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new User(userId, "Alice", "alice@example.com"));
+
+        var result = await Handle(new GetUserQuery(userId));
+
+        Assert.NotNull(result);
+        Assert.Equal("Alice", result!.Name);
+    }
+}
+```
+
+### Pipeline Behavior Test
+
+```csharp
+public class LoggingBehaviorTests
+    : PipelineBehaviorTestBase<
+        LoggingBehavior<PingRequest, string>,
+        PingRequest,
+        string>
+{
+    private readonly Mock<ILogger<LoggingBehavior<PingRequest, string>>> _loggerMock = new();
+
+    protected override LoggingBehavior<PingRequest, string> CreateBehavior()
+    {
+        return new LoggingBehavior<PingRequest, string>(_loggerMock.Object);
+    }
+
+    [Fact]
+    public async Task Should_Log_And_Call_Next()
+    {
+        var result = await InvokePipeline(new PingRequest(), "Pong!");
+
+        Assert.Equal("Pong!", result);
+        // Verify logging happened
+    }
+
+    [Fact]
+    public async Task Should_Log_Exceptions()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            InvokePipelineWithException(
+                new PingRequest(),
+                new InvalidOperationException("test error")));
+    }
+}
+```
+
+## TestScenario (Given/When/Then)
+
+BDD-style test builder:
+
+```csharp
+[Fact]
+public async Task Scenario_Create_And_Get_User()
+{
+    var userId = Guid.NewGuid();
+
+    await TestScenario.Create()
+        .Given(mediator =>
+        {
+            mediator.Setup<CreateUserCommand, User>(cmd =>
+                new User(userId, cmd.Name, cmd.Email));
+            mediator.SetupQuery<GetUserQuery, User?>(q =>
+                new User(q.Id, "Alice", "alice@example.com"));
+        })
+        .When(async mediator =>
+        {
+            var user = await mediator.Send(
+                new CreateUserCommand("Alice", "alice@example.com"));
+            await mediator.Publish(
+                new UserCreatedNotification(user.Id, user.Email));
+        })
+        .ThenVerify<CreateUserCommand>(Times.Once())
+        .ThenVerifyPublished<UserCreatedNotification>(Times.Once())
+        .Execute();
+}
+```
+
+## MediatorTestFixture
+
+For integration tests with real DI:
+
+```csharp
+public class IntegrationTests
+{
+    [Fact]
+    public async Task Full_Pipeline_Test()
+    {
+        var fixture = new MediatorTestFixture();
+
+        fixture.AddSingleton<IUserRepository>(new InMemoryUserRepository());
+
+        var mediator = fixture.Mediator;
+        var result = await mediator.Send(new CreateUserCommand("Alice", "alice@example.com"));
+
+        Assert.NotNull(result);
+    }
+}
+```
+
+<Callout type="info">
+`FakeMediator` is ideal for unit tests where you control all dependencies. `RecordingMediator` is better for integration tests where you want to verify interactions with a real pipeline.
+</Callout>

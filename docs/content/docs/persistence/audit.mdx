@@ -1,0 +1,128 @@
+---
+title: Audit
+description: Automatic audit logging for mediator operations
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The audit behavior automatically records detailed audit entries for operations, including who did what, when, and what data was involved.
+
+## Using the Attribute
+
+```csharp
+[Auditable]
+public record CreateUserCommand(string Name, string Email) : ICommand<User>;
+
+[Auditable(
+    IncludeRequest = true,
+    IncludeResponse = false,
+    ActionName = "DeleteUser",
+    ExcludeProperties = new[] { "Password", "Token" }
+)]
+public record DeleteUserCommand(Guid UserId) : ICommand;
+```
+
+### Attribute Properties
+
+| Property | Default | Description |
+|---|---|---|
+| `IncludeRequest` | `true` | Store request payload in audit |
+| `IncludeResponse` | `false` | Store response payload in audit |
+| `ActionName` | Message type name | Custom action name |
+| `ExcludeProperties` | Empty | Properties to exclude from serialization |
+
+## AuditEntry
+
+```csharp
+public class AuditEntry
+{
+    public Guid Id { get; set; }
+    public string? UserId { get; set; }
+    public string Action { get; set; }
+    public string EntityType { get; set; }
+    public string? EntityId { get; set; }
+    public string? RequestPayload { get; set; }   // JSON
+    public string? ResponsePayload { get; set; }   // JSON
+    public bool Success { get; set; }
+    public string? ErrorMessage { get; set; }
+    public DateTime Timestamp { get; set; }
+    public long DurationMs { get; set; }
+    public string? IpAddress { get; set; }
+    public string? UserAgent { get; set; }
+    public string? CorrelationId { get; set; }
+    public string? Metadata { get; set; }          // JSON
+}
+```
+
+## IAuditStore
+
+```csharp
+public interface IAuditStore
+{
+    ValueTask SaveAsync(AuditEntry entry, CancellationToken ct);
+    IAsyncEnumerable<AuditEntry> GetByEntityAsync(
+        string entityType, string entityId, CancellationToken ct);
+    IAsyncEnumerable<AuditEntry> GetByUserAsync(
+        string userId, CancellationToken ct);
+    IAsyncEnumerable<AuditEntry> GetByTimeRangeAsync(
+        DateTime from, DateTime to, CancellationToken ct);
+}
+```
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithAudit<IMessage, object>(options =>
+    {
+        options.IncludeResponse = false;
+        options.AuditFailures = true;
+        options.ThrowOnAuditFailure = false; // Don't fail the operation if audit fails
+    });
+
+    // Or audit everything
+    m.WithAuditForAll();
+});
+```
+
+## AuditOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `IncludeResponse` | `false` | Include response in audit entries |
+| `AuditFailures` | `true` | Audit failed operations too |
+| `ThrowOnAuditFailure` | `false` | Throw if audit storage fails |
+
+## Querying Audit Log
+
+```csharp
+public class AuditController : ControllerBase
+{
+    private readonly IAuditStore _auditStore;
+
+    public AuditController(IAuditStore auditStore) => _auditStore = auditStore;
+
+    [HttpGet("audit/user/{userId}")]
+    public async Task<IActionResult> GetUserAudit(string userId, CancellationToken ct)
+    {
+        var entries = new List<AuditEntry>();
+        await foreach (var entry in _auditStore.GetByUserAsync(userId, ct))
+            entries.Add(entry);
+        return Ok(entries);
+    }
+
+    [HttpGet("audit/entity/{entityType}/{entityId}")]
+    public async Task<IActionResult> GetEntityAudit(string entityType, string entityId, CancellationToken ct)
+    {
+        var entries = new List<AuditEntry>();
+        await foreach (var entry in _auditStore.GetByEntityAsync(entityType, entityId, ct))
+            entries.Add(entry);
+        return Ok(entries);
+    }
+}
+```
+
+<Callout type="info">
+The audit behavior records both successful and failed operations (when `AuditFailures` is true), including the error message for failures. This provides a complete audit trail for compliance.
+</Callout>

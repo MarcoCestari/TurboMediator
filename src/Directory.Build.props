@@ -1,0 +1,19 @@
+<Project>
+
+  <PropertyGroup>
+    <Version>0.9.0</Version>
+    <Authors>Marco Cestari</Authors>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/marcocestari/TurboMediator</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageProjectUrl>https://www.turbomediator.com</PackageProjectUrl>
+    <PackageIcon>icon.png</PackageIcon>
+    <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\assets\icon.png" Pack="true" PackagePath="\" />
+    <None Include="$(MSBuildThisFileDirectory)..\assets\README.nuget.md" Pack="true" PackagePath="\" Condition="Exists('$(MSBuildThisFileDirectory)..\assets\README.nuget.md')" />
+  </ItemGroup>
+
+</Project>

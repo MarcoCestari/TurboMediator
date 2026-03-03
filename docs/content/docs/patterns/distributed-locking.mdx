@@ -1,0 +1,286 @@
+---
+title: Distributed Locking
+description: Mutual exclusion across multiple instances using attribute-based distributed locks
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+Distributed locking ensures that only one instance of your application processes a given operation at a time — across pods, containers, or servers. TurboMediator integrates this as a pipeline behavior, keeping your handlers free of lock management boilerplate.
+
+<Callout type="info">
+  Distributed locking is a **concurrency** concern distinct from [Deduplication](/docs/enterprise/deduplication).
+  Deduplication prevents the same message from being processed **twice** (idempotency).
+  Distributed locking prevents the same **resource** from being processed **concurrently** by different instances.
+</Callout>
+
+## Packages
+
+| Package | Purpose |
+|---|---|
+| `TurboMediator.DistributedLocking` | Core behavior, abstractions, in-memory provider |
+| `TurboMediator.DistributedLocking.Redis` | Redis provider via [madelson/DistributedLock](https://github.com/madelson/DistributedLock) |
+
+## Installation
+
+```bash
+# Core (required)
+dotnet add package TurboMediator.DistributedLocking
+
+# Redis provider (production)
+dotnet add package TurboMediator.DistributedLocking.Redis
+```
+
+## Basic Usage
+
+### 1. Decorate your command
+
+```csharp
+[DistributedLock]
+public record WithdrawCommand(Guid AccountId, decimal Amount)
+    : ICommand<WithdrawResult>, ILockKeyProvider
+{
+    // Lock is scoped to this specific account — multiple accounts run concurrently.
+    public string GetLockKey() => AccountId.ToString();
+}
+```
+
+### 2. Register the behavior
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    // Lock provider
+    .WithInMemoryDistributedLocking()   // development / single-node
+    // .WithRedisDistributedLocking("localhost:6379")  // production
+
+    // Register the behavior for this command
+    .WithDistributedLocking<WithdrawCommand, WithdrawResult>()
+);
+```
+
+That's it. The handler runs only after the lock is acquired, and the lock is released automatically when the handler completes — even on exceptions.
+
+## Lock Key Strategies
+
+### Per-entity lock (recommended)
+
+Implement `ILockKeyProvider` to scope the lock to a single entity, allowing unrelated entities to be processed concurrently:
+
+```csharp
+[DistributedLock]
+public record TransferFundsCommand(Guid FromAccountId, Guid ToAccountId, decimal Amount)
+    : ICommand<TransferResult>, ILockKeyProvider
+{
+    // Only one transfer at a time per source account
+    public string GetLockKey() => FromAccountId.ToString();
+}
+```
+
+### Global message-type lock
+
+Without `ILockKeyProvider`, the lock key defaults to the message type name — only one instance of this command type runs across the cluster at any given time:
+
+```csharp
+[DistributedLock(TimeoutSeconds = 60)]
+public record RunDailyReportCommand : ICommand;
+// Lock key → "RunDailyReportCommand"  (global for this command type)
+```
+
+### Composite keys
+
+Combine multiple properties for finer granularity:
+
+```csharp
+[DistributedLock(KeyPrefix = "invoice")]
+public record ApproveInvoiceCommand(Guid TenantId, Guid InvoiceId)
+    : ICommand, ILockKeyProvider
+{
+    public string GetLockKey() => $"{TenantId}:{InvoiceId}";
+    // Resulting key → "invoice:tenant-abc:invoice-123"
+}
+```
+
+## Attribute Options
+
+```csharp
+[DistributedLock(
+    KeyPrefix = "payment",
+    TimeoutSeconds = 15,
+    ThrowIfNotAcquired = true
+)]
+public record ProcessPaymentCommand(Guid PaymentId) : ICommand, ILockKeyProvider
+{
+    public string GetLockKey() => PaymentId.ToString();
+}
+```
+
+| Property | Default | Description |
+|---|---|---|
+| `KeyPrefix` | _type name_ | Prefix for the lock key. Defaults to `typeof(TMessage).Name`. |
+| `TimeoutSeconds` | `30` | Seconds to wait for the lock before failing. Set to `0` to fail immediately. |
+| `ThrowIfNotAcquired` | `true` | Throw `DistributedLockException` if the lock cannot be acquired. When `false`, returns `default(TResponse)` instead. |
+
+## Global Options
+
+Override defaults for all locking behaviors at registration time:
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    .WithInMemoryDistributedLocking()
+    .WithDistributedLocking<WithdrawCommand, WithdrawResult>(options =>
+    {
+        options.DefaultTimeout = TimeSpan.FromSeconds(10);
+        options.GlobalKeyPrefix = "myapp";        // → "myapp:WithdrawCommand:accountId"
+        options.DefaultThrowIfNotAcquired = true;
+    })
+);
+```
+
+## Providers
+
+### In-Memory (development / single-node)
+
+Uses `SemaphoreSlim` per key. Zero dependencies, works without any external infrastructure. Not suitable for multi-instance deployments.
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    .WithInMemoryDistributedLocking()
+    // ...
+);
+```
+
+### Redis (production)
+
+Backed by [madelson/DistributedLock](https://github.com/madelson/DistributedLock), which uses the [RedLock](https://redis.io/docs/manual/patterns/distributed-locks/) algorithm under the hood.
+
+**Using a connection string (standalone setup):**
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    .WithRedisDistributedLocking("localhost:6379,abortConnect=false")
+    // ...
+);
+```
+
+**Full configuration:**
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    .WithRedisDistributedLocking(options =>
+    {
+        options.ConnectionString = "redis-primary:6379,redis-replica:6380";
+        options.Database = 0;
+        options.KeyPrefix = "turbo:locks";
+    })
+    // ...
+);
+```
+
+**Reusing an existing `IConnectionMultiplexer` from DI:**
+
+```csharp
+// Already registered elsewhere:
+builder.Services.AddSingleton<IConnectionMultiplexer>(
+    ConnectionMultiplexer.Connect("localhost:6379"));
+
+builder.Services.AddTurboMediator(m => m
+    .WithRedisDistributedLockingFromDI(options => options.KeyPrefix = "locks")
+    // ...
+);
+```
+
+### Custom Provider
+
+Implement `IDistributedLockProvider` for any backend (SQL Server, Azure Blob, etcd, …):
+
+```csharp
+public class SqlDistributedLockProvider : IDistributedLockProvider
+{
+    public async Task<IDistributedLockHandle?> TryAcquireAsync(
+        string key, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        // your implementation
+    }
+}
+
+// Register:
+builder.Services.AddTurboMediator(m => m
+    .WithDistributedLockProvider<SqlDistributedLockProvider>()
+    // ...
+);
+```
+
+## Error Handling
+
+When `ThrowIfNotAcquired = true` (default), a `DistributedLockException` is thrown if the lock times out:
+
+```csharp
+try
+{
+    var result = await mediator.Send(new WithdrawCommand(accountId, amount));
+}
+catch (DistributedLockException ex)
+{
+    // ex.LockKey  → the key that could not be acquired
+    // ex.Timeout  → the timeout that was exhausted
+    logger.LogWarning("Lock contention: {Key} waited {Timeout}s", ex.LockKey, ex.Timeout.TotalSeconds);
+    return Conflict("This account is currently locked. Please retry.");
+}
+```
+
+When `ThrowIfNotAcquired = false`, `default(TResponse)` is returned and the handler is **not** called. Use this only when skipping the operation on contention is acceptable:
+
+```csharp
+[DistributedLock(ThrowIfNotAcquired = false, TimeoutSeconds = 0)]
+public record BackgroundSyncCommand(Guid TenantId) : ICommand<SyncResult?>, ILockKeyProvider
+{
+    public string GetLockKey() => TenantId.ToString();
+}
+// Returns null instead of throwing if another sync is already running for this tenant.
+```
+
+## Testing
+
+The `InMemoryDistributedLockProvider` works perfectly in unit tests without any mocking:
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    .WithInMemoryDistributedLocking()
+    .WithDistributedLocking<WithdrawCommand, WithdrawResult>()
+);
+```
+
+You can also register a no-op stub if you want to isolate handler logic from locking behavior:
+
+```csharp
+public class NoOpLockProvider : IDistributedLockProvider
+{
+    private sealed class AlwaysAcquiredHandle : IDistributedLockHandle
+    {
+        public string Key { get; init; } = string.Empty;
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
+    public Task<IDistributedLockHandle?> TryAcquireAsync(
+        string key, TimeSpan timeout, CancellationToken ct)
+        => Task.FromResult<IDistributedLockHandle?>(new AlwaysAcquiredHandle { Key = key });
+}
+```
+
+## When to Use Distributed Locking
+
+| Scenario | Why it helps |
+|---|---|
+| Account balance operations (withdraw, transfer) | Prevents double-spending from concurrent requests |
+| Inventory reservation | Prevents over-selling the same stock unit |
+| Scheduled job execution | Ensures only one instance runs a job at a time |
+| Saga / saga step execution | Prevents two instances from advancing the same saga concurrently |
+| External API calls with side effects | Avoids duplicated charges or state changes |
+
+<Callout type="warn">
+  Distributed locking introduces latency and a dependency on an external coordination service.
+  Use it only for **write operations** on shared mutable state. Read-only queries should never need a lock.
+</Callout>
+
+## Sample
+
+See [`samples/Sample.DistributedLocking`](https://github.com/marcocestari/TurboMediator/tree/main/samples/Sample.DistributedLocking) for a complete bank account API demonstrating per-account locking, concurrent stress-testing, and lock contention handling.

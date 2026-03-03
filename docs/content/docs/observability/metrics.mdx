@@ -1,0 +1,71 @@
+---
+title: Metrics
+description: Detailed request metrics with System.Diagnostics.Metrics
+---
+
+The metrics behavior provides detailed request-level metrics using `System.Diagnostics.Metrics`, independent of the telemetry behavior.
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithMetrics<IMessage, object>(options =>
+    {
+        options.MeterName = "MyApp.Mediator";
+        options.MeterVersion = "1.0.0";
+    });
+});
+```
+
+## MetricsOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `EnableLatencyHistogram` | `true` | Record request duration histogram |
+| `EnableThroughputCounter` | `true` | Count total requests |
+| `EnableErrorCounter` | `true` | Count errors |
+| `EnableInFlightGauge` | `true` | Track in-flight requests |
+| `LatencyBuckets` | Default | Custom histogram buckets |
+| `CustomLabels` | `[]` | Additional label names (`IList<string>`) |
+| `CustomLabelValuesProvider` | `null` | Provider for custom label values |
+| `MeterName` | `"TurboMediator"` | Meter name for filtering |
+| `MeterVersion` | `"1.0.0"` | Meter version |
+
+## Instruments Created
+
+| Instrument | Type | Description |
+|---|---|---|
+| `turbomediator.handler.duration` | Histogram | Handler execution duration (ms) |
+| `turbomediator.handler.requests` | Counter | Total handler invocations |
+| `turbomediator.handler.errors` | Counter | Handler errors |
+| `turbomediator.handler.inflight` | UpDownCounter | Currently executing handlers |
+
+All metrics include `message_type` as a label.
+
+## Practical Example
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithMetrics<IMessage, object>(options =>
+    {
+        options.LatencyBuckets = new double[] { 5, 10, 25, 50, 100, 250, 500, 1000 };
+        options.CustomLabels = new List<string> { "service", "environment" };
+        options.CustomLabelValuesProvider = () => new Dictionary<string, object?>
+        {
+            ["service"] = "order-service",
+            ["environment"] = builder.Environment.EnvironmentName
+        };
+    });
+});
+
+// Export to Prometheus
+builder.Services.AddOpenTelemetry()
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddMeter("TurboMediator")
+            .AddPrometheusExporter();
+    });
+```

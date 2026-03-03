@@ -1,0 +1,131 @@
+---
+title: Comparison
+description: How TurboMediator compares to MediatR and MassTransit
+icon: Scale
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+This page compares TurboMediator against the two most referenced .NET libraries in this space: **MediatR** (the original mediator library) and **MassTransit** (the distributed messaging framework).
+
+<Callout type="info">
+  These libraries solve different problems. MassTransit is a distributed message bus — comparing it here is useful because teams sometimes reach for it when they only need in-process messaging. MediatR is the closest direct competitor.
+</Callout>
+
+---
+
+## Feature Matrix
+
+| Feature | MediatR | MassTransit | TurboMediator |
+|---|:---:|:---:|:---:|
+| **Core** | | | |
+| Request / Response | ✅ | ✅ | ✅ |
+| Notifications / Events | ✅ | ✅ | ✅ |
+| Streaming | ✅ | ✅ | ✅ |
+| Pipeline behaviors | ✅ | ✅ | ✅ |
+| **Performance** | | | |
+| Source-generated dispatch (no reflection) | ❌ | ❌ | ✅ |
+| Native AOT support | ❌ | Partial | ✅ |
+| Compile-time missing handler detection | ❌ | ❌ | ✅ |
+| Zero-overhead in-process dispatch | ❌ | ❌ | ✅ |
+| **Cross-cutting Concerns** | | | |
+| Built-in caching | ❌ | ❌ | ✅ |
+| Built-in validation | ❌ | ❌ | ✅ |
+| FluentValidation integration | Community | ❌ | ✅ |
+| Rate limiting | ❌ | ❌ | ✅ |
+| Distributed locking | ❌ | ❌ | ✅ |
+| Feature flags | ❌ | ❌ | ✅ |
+| **Resilience** | | | |
+| Retry | ❌ | ✅ | ✅ |
+| Circuit breaker | ❌ | ✅ | ✅ |
+| Timeout | ❌ | ✅ | ✅ |
+| Fallback | ❌ | ❌ | ✅ |
+| Hedging | ❌ | ❌ | ✅ |
+| **Observability** | | | |
+| OpenTelemetry tracing | Community | ✅ | ✅ |
+| Metrics | Community | ✅ | ✅ |
+| Structured logging | Community | ✅ | ✅ |
+| Correlation ID propagation | ❌ | ✅ | ✅ |
+| Health checks | ❌ | ✅ | ✅ |
+| **Workflows** | | | |
+| Sagas | ❌ | ✅ | ✅ |
+| Saga persistence (EF Core) | ❌ | ✅ | ✅ |
+| State machines | ❌ | ✅ | ✅ |
+| Scheduling / Recurring jobs | ❌ | ✅ | ✅ |
+| **Persistence** | | | |
+| Transactional outbox | ❌ | ✅ | ✅ |
+| Inbox (deduplication) | ❌ | ✅ | ✅ |
+| Audit trail | ❌ | ❌ | ✅ |
+| EF Core integration | ❌ | ✅ | ✅ |
+| **Enterprise** | | | |
+| Authorization | ❌ | ❌ | ✅ |
+| Multi-tenancy | ❌ | ❌ | ✅ |
+| Message deduplication | ❌ | ✅ | ✅ |
+| **Distributed Messaging** | | | |
+| RabbitMQ, Azure Service Bus, etc. | ❌ | ✅ | ❌ |
+| Multiple transport adapters | ❌ | ✅ | ❌ |
+| **Developer Experience** | | | |
+| CLI tooling | ❌ | ❌ | ✅ |
+| Testing utilities | ✅ | ✅ | ✅ |
+| **Licensing** | | | |
+| Free for all teams | ❌¹ | ❌² | ✅ |
+
+¹ MediatR's Community license is free only for companies/individuals with less than $5M USD in annual gross revenue that have never received more than $10M in outside capital. Source: [mediatr.io](https://mediatr.io).
+
+² MassTransit v9 transitioned to a commercial licensing model. v8 remains open-source but will only receive security patches until end of 2026. Pricing starts at $400/month for small/medium businesses. Source: [MassTransit v9 announcement](https://masstransit.io/introduction/v9-announcement).
+
+---
+
+## When to Choose What
+
+### Choose TurboMediator when
+
+- You need **in-process messaging** with the fastest possible dispatch (source-generated, no reflection)
+- You want **AOT / trimming** support
+- You want a **complete pipeline ecosystem** — resilience, validation, caching, sagas, scheduling, observability — all built to work together
+- You care about **compile-time safety** (missing handlers are caught at build time)
+- You need **enterprise features** like authorization, multi-tenancy, or an audit trail without stitching together separate libraries
+
+### Choose MediatR when
+
+- You have a **simple project** that only needs request/response dispatch and pipeline behaviors
+- Your team is already familiar with it and the use case doesn't justify a migration
+- Budget and licensing are not a concern
+
+### Choose MassTransit when
+
+- You need **distributed messaging** across services (RabbitMQ, Azure Service Bus, Amazon SQS, etc.)
+- Your architecture is **event-driven across process boundaries** rather than within a single process
+- You need **distributed transaction choreography** with Routing Slips
+
+<Callout type="warn">
+  MassTransit and TurboMediator are **not mutually exclusive**. A common architecture uses MassTransit for cross-service messaging and TurboMediator for in-process command/query dispatch within each service.
+</Callout>
+
+---
+
+## Performance Difference
+
+The main performance differentiator is how message dispatch works under the hood.
+
+| Approach | Dispatch mechanism | Runtime cost |
+|---|---|---|
+| MediatR | Reflection + `Dictionary<Type, object>` lookup | Allocation + reflection per call |
+| MassTransit (in-process) | Expression-compiled delegates | One-time compilation cost |
+| TurboMediator | Source-generated `switch` expression | Zero — resolved at compile time |
+
+TurboMediator's source generator emits code like this at build time:
+
+```csharp
+// Generated — no reflection, no dictionary lookup
+public ValueTask<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken ct) =>
+    request switch
+    {
+        CreateOrderCommand r => (ValueTask<TResponse>)(object)_createOrderHandler.Handle(r, ct),
+        GetOrderQuery r      => (ValueTask<TResponse>)(object)_getOrderHandler.Handle(r, ct),
+        // ... all registered handlers
+        _ => ThrowUnknownRequest<TResponse>(request)
+    };
+```
+
+This means **no heap allocations** for the dispatch itself and full **inlining** by the JIT.

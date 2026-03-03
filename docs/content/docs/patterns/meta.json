@@ -1,0 +1,6 @@
+{
+  "title": "Patterns",
+  "icon": "Puzzle",
+  "defaultOpen": false,
+  "pages": ["result-pattern", "caching", "validation", "saga", "state-machine", "batching", "rate-limiting", "distributed-locking", "feature-flags", "fluent-validation"]
+}

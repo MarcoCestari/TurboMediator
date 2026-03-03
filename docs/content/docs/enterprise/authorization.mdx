@@ -1,0 +1,173 @@
+---
+title: Authorization
+description: Declarative authorization with attributes and policy-based access control
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The authorization behavior provides attribute-based access control for mediator operations, checking roles and policies before the handler executes.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Enterprise
+```
+
+## Using Attributes
+
+### [Authorize]
+
+```csharp
+// Require authentication
+[Authorize]
+public record GetProfileQuery : IQuery<UserProfile>;
+
+// Require specific role
+[Authorize(Roles = "Admin")]
+public record DeleteUserCommand(Guid UserId) : ICommand;
+
+// Require a policy
+[Authorize(Policy = "CanManageOrders")]
+public record CancelOrderCommand(Guid OrderId) : ICommand;
+
+// Multiple requirements
+[Authorize(Roles = "Admin,Manager", Policy = "CanEditProducts")]
+public record UpdateProductCommand(Guid ProductId, string Name, decimal Price) : ICommand;
+
+// Authentication scheme
+[Authorize(AuthenticationSchemes = "Bearer")]
+public record GetApiDataQuery : IQuery<ApiData>;
+```
+
+### [AllowAnonymous]
+
+Override `[Authorize]` on specific operations:
+
+```csharp
+[AllowAnonymous]
+public record GetPublicProductsQuery : IQuery<IReadOnlyList<Product>>;
+```
+
+## IUserContext
+
+Implement `IUserContext` to provide user information:
+
+```csharp
+public interface IUserContext
+{
+    ClaimsPrincipal? User { get; }
+    bool IsAuthenticated { get; }
+}
+
+// ASP.NET Core implementation
+public class HttpUserContext : IUserContext
+{
+    private readonly IHttpContextAccessor _httpContextAccessor;
+
+    public HttpUserContext(IHttpContextAccessor httpContextAccessor)
+    {
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    public ClaimsPrincipal? User => _httpContextAccessor.HttpContext?.User;
+    public bool IsAuthenticated => User?.Identity?.IsAuthenticated ?? false;
+}
+```
+
+## IAuthorizationPolicyProvider
+
+Implement custom policy evaluation:
+
+```csharp
+public class CustomPolicyProvider : IAuthorizationPolicyProvider
+{
+    public ValueTask<bool> EvaluatePolicyAsync(
+        ClaimsPrincipal user,
+        string policy,
+        CancellationToken ct)
+    {
+        return policy switch
+        {
+            "CanManageOrders" => new ValueTask<bool>(
+                user.HasClaim("permission", "orders:manage")),
+            "CanEditProducts" => new ValueTask<bool>(
+                user.IsInRole("Admin") || user.HasClaim("permission", "products:edit")),
+            _ => new ValueTask<bool>(false)
+        };
+    }
+}
+```
+
+## Registration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithAuthorization<IMessage, object>();
+    m.WithUserContext<HttpUserContext>();
+    m.WithAuthorizationPolicies(policies =>
+    {
+        policies.AddPolicy("CanManageOrders", u => u.HasClaim("permission", "orders:manage"));
+        policies.AddPolicy("CanEditProducts", u =>
+            u.IsInRole("Admin") || u.HasClaim("permission", "products:edit"));
+    });
+});
+```
+
+## UnauthorizedException
+
+Thrown when authorization fails:
+
+```csharp
+try
+{
+    await mediator.Send(new DeleteUserCommand(userId));
+}
+catch (UnauthorizedException ex)
+{
+    // ex.MessageType — the message type that was denied
+    // ex.Policy — the policy that failed
+    // ex.RequiredRoles — required roles that the user doesn't have
+    return Results.Forbid();
+}
+```
+
+## Practical Example
+
+```csharp
+// Define messages with authorization
+[Authorize(Roles = "Admin")]
+public record PromoteUserCommand(Guid UserId, string NewRole) : ICommand;
+
+[Authorize(Policy = "CanViewReports")]
+public record GetSalesReportQuery(DateRange Range) : IQuery<SalesReport>;
+
+[AllowAnonymous]
+public record GetPublicStatsQuery : IQuery<PublicStats>;
+
+// Register
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithAuthorization<IMessage, object>();
+    m.WithUserContext<HttpUserContext>();
+});
+
+// Usage in API
+app.MapDelete("/users/{id}", async (Guid id, IMediator mediator) =>
+{
+    try
+    {
+        await mediator.Send(new PromoteUserCommand(id, "Manager"));
+        return Results.Ok();
+    }
+    catch (UnauthorizedException)
+    {
+        return Results.Forbid();
+    }
+});
+```
+
+<Callout type="info">
+The authorization behavior checks `[AllowAnonymous]` first. If present, authorization is skipped entirely. Otherwise, it validates authentication, roles, and policies in order.
+</Callout>

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Package Info -->
+    <PackageId>TurboMediator.DistributedLocking.Redis</PackageId>
+    <Description>Redis distributed lock provider for TurboMediator - powered by madelson/DistributedLock</Description>
+    <PackageTags>mediator;distributed-lock;redis;concurrency;pipeline;mutex</PackageTags>
+
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TurboMediator.DistributedLocking\TurboMediator.DistributedLocking.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DistributedLock.Redis" Version="1.0.2" />
+    <PackageReference Include="StackExchange.Redis" Version="2.7.10" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,178 @@
+---
+title: FluentValidation
+description: Automatic input validation using FluentValidation
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The FluentValidation integration automatically validates messages before they reach the handler, using your existing FluentValidation validators.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.FluentValidation
+```
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    // Auto-discover validators in the current assembly
+    m.WithFluentValidation();
+
+    // Or specify the assembly
+    m.WithFluentValidation<Program>();
+});
+```
+
+## Creating Validators
+
+Define validators using standard FluentValidation:
+
+```csharp
+using FluentValidation;
+
+public class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
+{
+    public CreateUserCommandValidator()
+    {
+        RuleFor(x => x.Name)
+            .NotEmpty().WithMessage("Name is required")
+            .MaximumLength(100).WithMessage("Name must be 100 characters or less");
+
+        RuleFor(x => x.Email)
+            .NotEmpty().WithMessage("Email is required")
+            .EmailAddress().WithMessage("Invalid email format");
+
+        RuleFor(x => x.Age)
+            .InclusiveBetween(18, 120).WithMessage("Age must be between 18 and 120");
+    }
+}
+
+public class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
+{
+    private readonly IProductRepository _repository;
+
+    public UpdateProductCommandValidator(IProductRepository repository)
+    {
+        _repository = repository;
+
+        RuleFor(x => x.Name)
+            .NotEmpty()
+            .MustAsync(async (name, ct) =>
+            {
+                var existing = await _repository.FindByNameAsync(name, ct);
+                return existing is null;
+            }).WithMessage("Product name already exists");
+
+        RuleFor(x => x.Price)
+            .GreaterThan(0).WithMessage("Price must be positive");
+    }
+}
+```
+
+## ValidationException
+
+When validation fails, a `ValidationException` is thrown with all failures:
+
+```csharp
+public class ValidationException : Exception
+{
+    public IReadOnlyList<ValidationFailure> Failures { get; }
+}
+
+public class ValidationFailure
+{
+    public string PropertyName { get; }
+    public string ErrorMessage { get; }
+    public object? AttemptedValue { get; }
+    public string? ErrorCode { get; }
+    public ValidationSeverity Severity { get; }
+}
+
+public enum ValidationSeverity
+{
+    Error,
+    Warning,
+    Info
+}
+```
+
+## Handling Validation Errors
+
+```csharp
+app.MapPost("/users", async (CreateUserCommand command, IMediator mediator) =>
+{
+    try
+    {
+        var user = await mediator.Send(command);
+        return Results.Created($"/users/{user.Id}", user);
+    }
+    catch (ValidationException ex)
+    {
+        var errors = ex.Failures
+            .Select(f => new { f.PropertyName, f.ErrorMessage })
+            .ToList();
+        return Results.BadRequest(new { Errors = errors });
+    }
+});
+```
+
+### Global Exception Handler
+
+```csharp
+app.UseExceptionHandler(app =>
+{
+    app.Run(async context =>
+    {
+        var exception = context.Features.Get<IExceptionHandlerFeature>()?.Error;
+        if (exception is ValidationException validationEx)
+        {
+            context.Response.StatusCode = 400;
+            await context.Response.WriteAsJsonAsync(new
+            {
+                Type = "ValidationError",
+                Errors = validationEx.Failures.Select(f => new
+                {
+                    Field = f.PropertyName,
+                    Message = f.ErrorMessage,
+                    Severity = f.Severity.ToString()
+                })
+            });
+        }
+    });
+});
+```
+
+## Multiple Validators
+
+You can define multiple validators for the same message. All validators are executed and all failures are collected:
+
+```csharp
+// Basic validation rules
+public class CreateOrderBasicValidator : AbstractValidator<CreateOrderCommand>
+{
+    public CreateOrderBasicValidator()
+    {
+        RuleFor(x => x.Items).NotEmpty();
+    }
+}
+
+// Business rule validation (separate concerns)
+public class CreateOrderBusinessValidator : AbstractValidator<CreateOrderCommand>
+{
+    public CreateOrderBusinessValidator(IInventoryService inventory)
+    {
+        RuleForEach(x => x.Items).MustAsync(async (item, ct) =>
+        {
+            var stock = await inventory.GetStockAsync(item.ProductId, ct);
+            return stock >= item.Quantity;
+        }).WithMessage("Insufficient stock");
+    }
+}
+```
+
+<Callout type="info">
+The `FluentValidationBehavior` resolves **all** `IValidator<TMessage>` from DI and runs them. Failures from all validators are aggregated into a single `ValidationException`.
+</Callout>

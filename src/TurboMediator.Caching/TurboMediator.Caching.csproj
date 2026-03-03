@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- Package Info -->
+    <PackageId>TurboMediator.Caching</PackageId>
+    <Description>Response caching for TurboMediator - attribute-based caching with pluggable providers</Description>
+    <PackageTags>mediator;caching;pipeline;in-memory-cache</PackageTags>
+
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
+  </ItemGroup>
+
+</Project>

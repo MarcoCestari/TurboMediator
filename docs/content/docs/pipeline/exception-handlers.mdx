@@ -1,0 +1,119 @@
+---
+title: Exception Handlers
+description: Gracefully handling exceptions in the pipeline
+---
+
+Exception handlers allow you to intercept and handle exceptions thrown by handlers or other pipeline behaviors, without wrapping everything in try-catch blocks.
+
+## IMessageExceptionHandler
+
+```csharp
+public interface IMessageExceptionHandler<in TMessage, TResponse, in TException>
+    where TMessage : IMessage
+    where TException : Exception
+{
+    ValueTask<ExceptionHandlingResult<TResponse>> Handle(
+        TMessage message,
+        TException exception,
+        CancellationToken cancellationToken);
+}
+```
+
+## ExceptionHandlingResult
+
+The handler returns one of two results:
+
+```csharp
+// Exception was handled — return a fallback response
+ExceptionHandlingResult<TResponse>.HandledWith(fallbackResponse);
+
+// Exception was NOT handled — let it propagate
+ExceptionHandlingResult<TResponse>.NotHandled();
+```
+
+## Example: Fallback on Database Error
+
+```csharp
+public class DatabaseExceptionHandler
+    : IMessageExceptionHandler<GetUserQuery, User?, DbException>
+{
+    private readonly ILogger<DatabaseExceptionHandler> _logger;
+    private readonly ICacheProvider _cache;
+
+    public DatabaseExceptionHandler(
+        ILogger<DatabaseExceptionHandler> logger,
+        ICacheProvider cache)
+    {
+        _logger = logger;
+        _cache = cache;
+    }
+
+    public async ValueTask<ExceptionHandlingResult<User?>> Handle(
+        GetUserQuery message,
+        DbException exception,
+        CancellationToken ct)
+    {
+        _logger.LogWarning(exception,
+            "Database error for GetUserQuery({Id}), falling back to cache",
+            message.Id);
+
+        // Try to return cached data
+        var cacheResult = await _cache.GetAsync<User?>($"user:{message.Id}");
+        if (cacheResult.HasValue)
+        {
+            return ExceptionHandlingResult<User?>.HandledWith(cacheResult.Value);
+        }
+
+        // Can't handle — let exception propagate
+        return ExceptionHandlingResult<User?>.NotHandled();
+    }
+}
+```
+
+## Example: Generic Error Logging
+
+```csharp
+public class GenericExceptionHandler<TMessage, TResponse>
+    : IMessageExceptionHandler<TMessage, TResponse, Exception>
+    where TMessage : IMessage
+{
+    private readonly ILogger<GenericExceptionHandler<TMessage, TResponse>> _logger;
+
+    public GenericExceptionHandler(
+        ILogger<GenericExceptionHandler<TMessage, TResponse>> logger)
+    {
+        _logger = logger;
+    }
+
+    public ValueTask<ExceptionHandlingResult<TResponse>> Handle(
+        TMessage message,
+        Exception exception,
+        CancellationToken ct)
+    {
+        _logger.LogError(exception,
+            "Unhandled exception in {MessageType}: {ErrorMessage}",
+            typeof(TMessage).Name, exception.Message);
+
+        // Let the exception propagate after logging
+        return new ValueTask<ExceptionHandlingResult<TResponse>>(
+            ExceptionHandlingResult<TResponse>.NotHandled());
+    }
+}
+```
+
+## Registration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithExceptionHandler<DatabaseExceptionHandler>();
+    m.WithExceptionHandler<GenericExceptionHandler<IMessage, object>>();
+});
+```
+
+## When to Use Exception Handlers
+
+- **Fallback responses** — Return cached or default data when primary source fails
+- **Error logging** — Centralized error logging without try-catch in every handler
+- **Error translation** — Convert infrastructure exceptions to domain-specific exceptions
+- **Graceful degradation** — Return partial results when some operations fail

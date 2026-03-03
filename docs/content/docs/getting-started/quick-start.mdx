@@ -1,0 +1,174 @@
+---
+title: Quick Start
+description: Get up and running with TurboMediator in minutes
+---
+
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+import { Callout } from 'fumadocs-ui/components/callout';
+
+This guide walks you through building a simple application with TurboMediator.
+
+<Steps>
+
+<Step>
+### Install the packages
+
+```bash title="Terminal"
+dotnet add package TurboMediator.Abstractions
+dotnet add package TurboMediator.SourceGenerator
+```
+</Step>
+
+<Step>
+### Define your messages
+
+TurboMediator supports four message types following CQRS principles:
+
+```csharp title="Messages.cs"
+using TurboMediator;
+
+// Query — read operation, returns data
+public record GetUserQuery(Guid Id) : IQuery<User?>;
+
+// Command — write operation, returns result
+public record CreateUserCommand(string Name, string Email) : ICommand<User>;
+
+// Request — generic request with response
+public record PingRequest : IRequest<string>;
+
+// Notification — fire-and-forget, multiple handlers
+public record UserCreatedNotification(Guid UserId, string Email) : INotification;
+
+// Supporting types
+public record User(Guid Id, string Name, string Email);
+```
+</Step>
+
+<Step>
+### Create handlers
+
+Each message type has a corresponding handler interface:
+
+```csharp title="Handlers.cs"
+using TurboMediator;
+
+public class GetUserHandler : IQueryHandler<GetUserQuery, User?>
+{
+    public ValueTask<User?> Handle(GetUserQuery query, CancellationToken ct)
+    {
+        var user = new User(query.Id, "John Doe", "john@example.com");
+        return new ValueTask<User?>(user);
+    }
+}
+
+public class CreateUserHandler : ICommandHandler<CreateUserCommand, User>
+{
+    public ValueTask<User> Handle(CreateUserCommand command, CancellationToken ct)
+    {
+        var user = new User(Guid.NewGuid(), command.Name, command.Email);
+        return new ValueTask<User>(user);
+    }
+}
+
+public class PingHandler : IRequestHandler<PingRequest, string>
+{
+    public ValueTask<string> Handle(PingRequest request, CancellationToken ct)
+    {
+        return new ValueTask<string>("Pong!");
+    }
+}
+
+// Multiple notification handlers are allowed
+public class EmailNotificationHandler : INotificationHandler<UserCreatedNotification>
+{
+    public ValueTask Handle(UserCreatedNotification notification, CancellationToken ct)
+    {
+        Console.WriteLine($"Sending welcome email to {notification.Email}");
+        return default;
+    }
+}
+
+public class LogNotificationHandler : INotificationHandler<UserCreatedNotification>
+{
+    public ValueTask Handle(UserCreatedNotification notification, CancellationToken ct)
+    {
+        Console.WriteLine($"User created: {notification.UserId}");
+        return default;
+    }
+}
+```
+</Step>
+
+<Step>
+### Register services
+
+```csharp title="Program.cs"
+using Microsoft.Extensions.DependencyInjection;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Register TurboMediator — handlers are auto-discovered
+builder.Services.AddTurboMediator();
+
+var app = builder.Build();
+```
+</Step>
+
+<Step>
+### Use the mediator
+
+Inject `IMediator` (or `ISender` / `IPublisher`) and send messages:
+
+```csharp title="Usage"
+app.MapGet("/ping", async (IMediator mediator) =>
+{
+    var result = await mediator.Send(new PingRequest());
+    return Results.Ok(result); // "Pong!"
+});
+
+app.MapGet("/users/{id}", async (Guid id, IMediator mediator) =>
+{
+    var user = await mediator.Send(new GetUserQuery(id));
+    return user is not null ? Results.Ok(user) : Results.NotFound();
+});
+
+app.MapPost("/users", async (CreateUserCommand command, IMediator mediator) =>
+{
+    var user = await mediator.Send(command);
+
+    // Publish notification — all handlers will be invoked
+    await mediator.Publish(new UserCreatedNotification(user.Id, user.Email));
+
+    return Results.Created($"/users/{user.Id}", user);
+});
+
+app.Run();
+```
+</Step>
+
+</Steps>
+
+<Callout type="info">
+The source generator automatically discovers all handlers in your project and generates compile-time dispatch code. You don't need to manually register each handler.
+</Callout>
+
+## Compile-Time Safety
+
+TurboMediator validates your handlers at build time. You'll get compiler errors for:
+
+| Diagnostic | Description |
+|---|---|
+| `TURBO001` | Missing handler for a message |
+| `TURBO002` | Multiple handlers for the same message (except notifications) |
+| `TURBO003` | Invalid handler signature |
+| `TURBO004` | Response type mismatch |
+| `TURBO008` | Handler must be public |
+
+## What's Next?
+
+Now that you have a working setup, explore the features:
+
+- [Messages & Handlers](/docs/core/messages) — Learn about all message types
+- [Pipeline Behaviors](/docs/pipeline/behaviors) — Add cross-cutting concerns
+- [Streaming](/docs/core/streaming) — Use `IAsyncEnumerable` for streaming
+- [Notifications](/docs/core/notifications) — Multi-handler publish strategies

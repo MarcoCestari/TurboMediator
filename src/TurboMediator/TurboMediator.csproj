@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+
+    <!-- Metapackage: no code, just dependencies -->
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+
+    <!-- Package Info -->
+    <PackageId>TurboMediator</PackageId>
+    <Description>High-performance Mediator pattern for .NET using Source Generators. Zero reflection, Native AOT compatible, compile-time validated.</Description>
+    <PackageTags>mediator;cqrs;source-generator;high-performance;aot;native-aot</PackageTags>
+    <PackageProjectUrl>https://www.turbomediator.com</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
+    <ProjectReference Include="..\TurboMediator.SourceGenerator\TurboMediator.SourceGenerator.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,6 @@
+{
+  "title": "Resilience",
+  "icon": "ShieldCheck",
+  "defaultOpen": false,
+  "pages": ["retry", "circuit-breaker", "timeout", "fallback", "hedging"]
+}

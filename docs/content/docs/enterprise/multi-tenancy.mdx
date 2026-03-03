@@ -1,0 +1,123 @@
+---
+title: Multi-Tenancy
+description: Tenant isolation and validation for multi-tenant applications
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The multi-tenancy behavior ensures tenant context is present and validated for operations that require it.
+
+## Core Interfaces
+
+### ITenantContext
+
+Provides current tenant information:
+
+```csharp
+public interface ITenantContext
+{
+    string? TenantId { get; }
+    bool HasTenant { get; }
+    string? TenantName { get; }
+}
+```
+
+### ITenantAware
+
+Mark messages that belong to a specific tenant:
+
+```csharp
+public interface ITenantAware
+{
+    string? TenantId { get; }
+}
+```
+
+## Using the Attribute
+
+```csharp
+[RequiresTenant]
+public record GetTenantDataQuery(string DataKey) : IQuery<TenantData>;
+```
+
+## Tenant-Aware Messages
+
+```csharp
+public record CreateTenantDocumentCommand(
+    string TenantId,
+    string Title,
+    string Content
+) : ICommand<Document>, ITenantAware;
+```
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithMultiTenancy<IMessage, object>();
+    m.WithTenantContext<HttpTenantContext>();
+});
+```
+
+## Implementing ITenantContext
+
+```csharp
+public class HttpTenantContext : ITenantContext
+{
+    private readonly IHttpContextAccessor _httpContextAccessor;
+
+    public HttpTenantContext(IHttpContextAccessor httpContextAccessor)
+    {
+        _httpContextAccessor = httpContextAccessor;
+    }
+
+    public string? TenantId =>
+        _httpContextAccessor.HttpContext?.Request.Headers["X-Tenant-Id"].FirstOrDefault()
+        ?? _httpContextAccessor.HttpContext?.User?.FindFirst("tenant_id")?.Value;
+
+    public bool HasTenant => !string.IsNullOrEmpty(TenantId);
+
+    public string? TenantName =>
+        _httpContextAccessor.HttpContext?.User?.FindFirst("tenant_name")?.Value;
+}
+```
+
+## Validation Rules
+
+The `TenantBehavior` validates:
+
+1. If `[RequiresTenant]` is present, `ITenantContext.HasTenant` must be `true`
+2. If the message implements `ITenantAware`, the message's `TenantId` must match `ITenantContext.TenantId`
+3. Throws an exception if validation fails
+
+## Practical Example
+
+```csharp
+// Tenant-isolated queries
+[RequiresTenant]
+public record GetTenantUsersQuery : IQuery<IReadOnlyList<User>>;
+
+public class GetTenantUsersHandler : IQueryHandler<GetTenantUsersQuery, IReadOnlyList<User>>
+{
+    private readonly ITenantContext _tenantContext;
+    private readonly IUserRepository _repository;
+
+    public GetTenantUsersHandler(ITenantContext tenantContext, IUserRepository repository)
+    {
+        _tenantContext = tenantContext;
+        _repository = repository;
+    }
+
+    public async ValueTask<IReadOnlyList<User>> Handle(
+        GetTenantUsersQuery query, CancellationToken ct)
+    {
+        // TenantId is guaranteed to be present by the behavior
+        return await _repository.GetByTenantAsync(_tenantContext.TenantId!, ct);
+    }
+}
+```
+
+<Callout type="warn">
+The tenant behavior should be registered **before** the handler in the pipeline to ensure tenant validation happens early. Register it after authentication/authorization.
+</Callout>

@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Resilience\TurboMediator.Resilience.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Observability\TurboMediator.Observability.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Caching\TurboMediator.Caching.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Validation\TurboMediator.Validation.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Enterprise\TurboMediator.Enterprise.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.FluentValidation\TurboMediator.FluentValidation.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.SourceGenerator\TurboMediator.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,6 @@
+{
+  "title": "Scheduling",
+  "icon": "Clock",
+  "defaultOpen": false,
+  "pages": ["index", "recurring-jobs", "retry-strategies", "job-store", "entity-framework"]
+}

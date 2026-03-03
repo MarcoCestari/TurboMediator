@@ -1,0 +1,108 @@
+---
+title: Telemetry
+description: OpenTelemetry distributed tracing and metrics integration
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The telemetry behavior integrates with OpenTelemetry to provide distributed tracing and metrics for all mediator operations.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Observability
+```
+
+## Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    // Apply to all messages
+    m.WithTelemetry(options =>
+    {
+        options.RecordTraces = true;
+        options.RecordMetrics = true;
+        options.RecordExceptionStackTrace = false;
+    });
+
+    // Or apply to a specific message type
+    m.WithTelemetry<ProcessOrderCommand, OrderResult>(options =>
+    {
+        options.RecordExceptionStackTrace = true;
+    });
+});
+```
+
+## TelemetryOptions
+
+| Option | Default | Description |
+|---|---|---|
+| `RecordTraces` | `true` | Create Activity spans for each operation |
+| `RecordMetrics` | `true` | Record counters and histograms |
+| `RecordExceptionStackTrace` | `false` | Include stack traces in error events |
+
+## Built-in Metrics
+
+`TurboMediatorTelemetry` provides these static instruments:
+
+| Metric | Type | Description |
+|---|---|---|
+| `turbomediator.requests.total` | Counter | Total requests processed |
+| `turbomediator.requests.success` | Counter | Successful requests |
+| `turbomediator.requests.failure` | Counter | Failed requests |
+| `turbomediator.requests.duration` | Histogram | Request duration in milliseconds |
+| `turbomediator.notifications.total` | Counter | Total notifications published |
+
+## Custom Telemetry Tags
+
+Implement `ITelemetryEnriched` on your messages to add custom tags to traces:
+
+```csharp
+public record ProcessOrderCommand(Guid OrderId, string Region)
+    : ICommand<OrderResult>, ITelemetryEnriched
+{
+    public IEnumerable<KeyValuePair<string, object?>> GetTelemetryTags()
+    {
+        return new Dictionary<string, object?>
+        {
+            ["order.id"] = OrderId.ToString(),
+            ["order.region"] = Region
+        };
+    }
+}
+```
+
+## OpenTelemetry Integration
+
+Register the TurboMediator source with your OpenTelemetry configuration:
+
+```csharp
+builder.Services.AddOpenTelemetry()
+    .WithTracing(tracing =>
+    {
+        tracing
+            .AddSource(TurboMediatorTelemetry.ActivitySource.Name)
+            .AddAspNetCoreInstrumentation()
+            .AddOtlpExporter();
+    })
+    .WithMetrics(metrics =>
+    {
+        metrics
+            .AddMeter(TurboMediatorTelemetry.Meter.Name)
+            .AddOtlpExporter();
+    });
+```
+
+## Activity Spans
+
+Each mediator operation creates an `Activity` span with:
+
+- **Name**: Message type name (e.g., `CreateUserCommand`)
+- **Tags**: Message type, handler type, success/failure status, duration
+- **Events**: Exception details on failure
+- **Custom tags**: From `ITelemetryEnriched` implementations
+
+<Callout type="info">
+The telemetry behavior automatically correlates with ASP.NET Core and HttpClient traces when using OpenTelemetry, giving you end-to-end distributed tracing.
+</Callout>

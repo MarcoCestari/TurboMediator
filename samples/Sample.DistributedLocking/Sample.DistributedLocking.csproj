@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Sample.DistributedLocking</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.DistributedLocking\TurboMediator.DistributedLocking.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.DistributedLocking.Redis\TurboMediator.DistributedLocking.Redis.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.SourceGenerator\TurboMediator.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

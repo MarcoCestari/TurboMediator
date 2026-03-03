@@ -1,0 +1,138 @@
+---
+title: Retry Strategies
+description: Configure retry behavior for failed recurring jobs
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Overview
+
+When a handler throws an exception (other than `SkipJobException` or `TerminateJobException`), the scheduling processor retries according to the configured `RetryStrategy`. The retry intervals are stored as an `int[]` of seconds on the `RecurringJobRecord`.
+
+## Built-in Strategies
+
+### None (Default)
+
+No retries. The occurrence is immediately marked as `Failed`.
+
+```csharp
+.WithRetry(RetryStrategy.None)
+```
+
+### Fixed
+
+Retries a fixed number of times with a constant delay:
+
+```csharp
+// 3 retries, each after 60 seconds
+.WithRetry(RetryStrategy.Fixed(attempts: 3, delaySeconds: 60))
+```
+
+Produces intervals: `[60, 60, 60]`
+
+### Exponential Backoff
+
+Retries with exponentially increasing delays:
+
+```csharp
+// 5 retries: 2s, 4s, 8s, 16s, 32s
+.WithRetry(RetryStrategy.ExponentialBackoff(maxAttempts: 5, baseSeconds: 2))
+```
+
+Produces intervals: `[2, 4, 8, 16, 32]`
+
+### Immediate
+
+Retries immediately (0-second delay):
+
+```csharp
+// 3 immediate retries
+.WithRetry(RetryStrategy.Immediate(attempts: 3))
+```
+
+Produces intervals: `[0, 0, 0]`
+
+### Custom
+
+Provide exact intervals manually:
+
+```csharp
+// Wait 10s, then 30s, then 120s
+.WithRetry(RetryStrategy.Custom(new[] { 10, 30, 120 }))
+```
+
+## How Retries Work
+
+```
+Job fails → Check retry intervals
+  ├── RetryCount < intervals.Length → Wait intervals[RetryCount] seconds → Retry
+  └── RetryCount >= intervals.Length → Mark as Failed (exhausted)
+```
+
+1. On first failure, `RetryCount = 0`, the processor waits `intervals[0]` seconds
+2. On second failure, `RetryCount = 1`, it waits `intervals[1]` seconds
+3. This continues until all intervals are exhausted
+4. Each retry creates a new loop iteration with updated `RetryCount` on the `IJobExecutionContext`
+
+## Retry vs Skip vs Terminate
+
+| Scenario | What to use | Retries? |
+|----------|-------------|----------|
+| Transient failure (network, timeout) | Let the exception propagate | Yes |
+| Business logic skip (already processed) | `throw new SkipJobException(...)` | No |
+| Fatal error (bad config) | `throw new TerminateJobException(...)` | No |
+| Expected failure pattern | `RetryStrategy.Custom(...)` | Yes, with custom intervals |
+
+## Accessing Retry Count in Handlers
+
+```csharp
+public class ResilientHandler : ICommandHandler<ApiSyncCommand, Unit>
+{
+    private readonly IJobExecutionContext _ctx;
+    private readonly HttpClient _http;
+
+    public ResilientHandler(IJobExecutionContext ctx, HttpClient http)
+    {
+        _ctx = ctx;
+        _http = http;
+    }
+
+    public async ValueTask<Unit> Handle(ApiSyncCommand cmd, CancellationToken ct)
+    {
+        if (_ctx.RetryCount > 0)
+        {
+            // Use fallback endpoint on retry
+            await _http.GetAsync("/api/fallback/sync", ct);
+        }
+        else
+        {
+            await _http.GetAsync("/api/primary/sync", ct);
+        }
+
+        return Unit.Value;
+    }
+}
+```
+
+## Complete Example
+
+```csharp
+builder.Services.AddTurboMediator(m => m
+    .WithScheduling(scheduling =>
+    {
+        scheduling.UseInMemoryStore();
+
+        scheduling.AddRecurringJob<SyncOrdersCommand>("sync-orders")
+            .WithCron("0 */2 * * *")               // every 2 hours
+            .WithRetry(RetryStrategy.ExponentialBackoff(
+                maxAttempts: 4,
+                baseSeconds: 5))                     // 5s, 10s, 20s, 40s
+            .SkipIfAlreadyRunning()
+            .WithData(() => new SyncOrdersCommand());
+    })
+);
+```
+
+<Callout type="info">
+Retry intervals are persisted in the job store as `RetryIntervalSeconds` (an `int[]`). This means you can inspect and even modify them at runtime through a custom `IJobStore` implementation.
+</Callout>

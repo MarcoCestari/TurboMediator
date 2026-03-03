@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>TurboMediator.Persistence.EF</RootNamespace>
+
+    <!-- Package Info -->
+    <PackageId>TurboMediator.Persistence.EF</PackageId>
+    <Description>Entity Framework Core provider for TurboMediator.Persistence - EF Core implementations of Transaction, Outbox, and Audit stores</Description>
+    <PackageTags>mediator;cqrs;ef;efcore;entityframework;transaction;outbox;audit</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\TurboMediator.Persistence\TurboMediator.Persistence.csproj" />
+  </ItemGroup>
+
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="8.0.0" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Relational" Version="8.0.0" />
+  </ItemGroup>
+
+</Project>

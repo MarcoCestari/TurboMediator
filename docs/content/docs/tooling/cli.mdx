@@ -1,0 +1,108 @@
+---
+title: CLI Tool
+description: Analyze, document, and benchmark your TurboMediator setup
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The `dotnet-turbo` CLI tool provides analysis, documentation generation, health monitoring, and benchmarking capabilities.
+
+## Installation
+
+```bash
+dotnet tool install --global TurboMediator.Cli
+```
+
+## Commands
+
+### analyze — Handler Coverage
+
+Analyzes your project for handler coverage, identifying missing or duplicate handlers:
+
+```bash
+dotnet-turbo analyze -p ./src/MyApp
+```
+
+Output:
+```
+📊 TurboMediator Analysis
+─────────────────────────
+Messages found: 15
+Handlers found: 14
+
+✅ CreateUserCommand → CreateUserHandler
+✅ GetUserQuery → GetUserHandler
+✅ UserCreatedNotification → EmailHandler, LogHandler
+⚠️ OrphanedCommand → No handler found!
+
+Coverage: 93% (14/15)
+```
+
+### docs — Generate Documentation
+
+Generates API documentation from your codebase in markdown, HTML, or JSON format:
+
+```bash
+# Markdown (default)
+dotnet-turbo docs -p ./src/MyApp -o ./docs -f markdown
+
+# HTML
+dotnet-turbo docs -p ./src/MyApp -o ./docs/api -f html
+
+# JSON (for programmatic use)
+dotnet-turbo docs -p ./src/MyApp -o ./api-docs.json -f json
+```
+
+Generated documentation includes:
+- All message types with their properties
+- All handlers with their associated messages
+- Pipeline behaviors and their order
+- XML doc comments (if present)
+
+### health — Health Check
+
+Check the health of a running TurboMediator application:
+
+```bash
+# One-time check
+dotnet-turbo health -e https://localhost:5001/health
+
+# Watch mode with live table
+dotnet-turbo health -e https://localhost:5001/health --watch
+```
+
+Watch mode displays a live `Spectre.Console` table that auto-refreshes.
+
+### benchmark — Performance Analysis
+
+Analyzes handler complexity and estimates performance characteristics:
+
+```bash
+dotnet-turbo benchmark -p ./src/MyApp
+```
+
+Output:
+```
+🚀 TurboMediator Benchmarks
+───────────────────────────
+Handler Analysis:
+
+  CreateUserHandler
+    Complexity: Medium
+    Async Operations: 2 (DB write, notification publish)
+    Estimated Latency: 5-15ms
+
+  GetUserHandler
+    Complexity: Low
+    Async Operations: 1 (DB read)
+    Estimated Latency: 1-5ms
+
+  ProcessVideoHandler
+    Complexity: High
+    Async Operations: 4 (API call, S3 upload, DB write, notification)
+    Estimated Latency: 100-500ms
+```
+
+<Callout type="info">
+The CLI tool uses MSBuild/Roslyn workspace to analyze your source code at the syntax and semantic level. It doesn't require compiling or running your application.
+</Callout>

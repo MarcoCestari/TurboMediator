@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>Sample.ResultPattern</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Result\TurboMediator.Result.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.SourceGenerator\TurboMediator.SourceGenerator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,111 @@
+---
+title: Retry
+description: Automatic retry with exponential backoff for transient failures
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The retry behavior automatically retries failed operations with configurable exponential backoff and jitter, making your application resilient to transient failures.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Resilience
+```
+
+## Basic Usage
+
+### Using Attributes
+
+The simplest way to add retry is via the `[Retry]` attribute:
+
+```csharp
+[Retry(maxAttempts: 3, delayMilliseconds: 1000)]
+public record SendEmailCommand(string To, string Subject, string Body) : ICommand;
+```
+
+### Using Configuration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithRetry<SendEmailCommand, Unit>(options =>
+    {
+        options.MaxAttempts = 3;
+        options.DelayMilliseconds = 1000;
+        options.UseExponentialBackoff = true;
+        options.MaxDelayMilliseconds = 30000;
+    });
+});
+```
+
+## Attribute Options
+
+```csharp
+[Retry(
+    maxAttempts: 5,
+    delayMilliseconds: 500,
+    UseExponentialBackoff = true,
+    MaxDelayMilliseconds = 15000,
+    RetryOnExceptions = new[] { typeof(HttpRequestException), typeof(TimeoutException) }
+)]
+public record CallExternalApiQuery(string Endpoint) : IQuery<ApiResponse>;
+```
+
+| Parameter | Default | Description |
+|---|---|---|
+| `maxAttempts` | 3 | Maximum number of retry attempts |
+| `delayMilliseconds` | 1000 | Base delay between retries |
+| `UseExponentialBackoff` | `true` | Doubles delay on each retry |
+| `MaxDelayMilliseconds` | 30000 | Maximum delay cap |
+| `RetryOnExceptions` | All | Exception types that trigger a retry |
+
+## RetryOptions
+
+```csharp
+public class RetryOptions
+{
+    public int MaxAttempts { get; set; } = 3;
+    public int DelayMilliseconds { get; set; } = 1000;
+    public bool UseExponentialBackoff { get; set; } = true;
+    public int MaxDelayMilliseconds { get; set; } = 30000;
+    public Type[]? RetryOnExceptions { get; set; }
+}
+```
+
+## How It Works
+
+1. Executes the handler
+2. If the handler throws an exception matching `RetryOnExceptions`:
+   - Waits for `delay + random jitter`
+   - Retries the handler (up to `MaxAttempts`)
+3. If exponential backoff is enabled, each retry doubles the delay
+4. If all attempts fail, the last exception is thrown
+
+## Practical Example
+
+```csharp
+// Message
+[Retry(maxAttempts: 3, delayMilliseconds: 200, UseExponentialBackoff = true)]
+public record SyncInventoryCommand(string ProductId) : ICommand<SyncResult>;
+
+// Handler
+public class SyncInventoryHandler : ICommandHandler<SyncInventoryCommand, SyncResult>
+{
+    private readonly IExternalInventoryApi _api;
+
+    public SyncInventoryHandler(IExternalInventoryApi api) => _api = api;
+
+    public async ValueTask<SyncResult> Handle(
+        SyncInventoryCommand command, CancellationToken ct)
+    {
+        // This may fail due to network issues — retry will handle it
+        var stock = await _api.GetStockLevel(command.ProductId, ct);
+        return new SyncResult(command.ProductId, stock);
+    }
+}
+```
+
+<Callout type="info">
+The retry behavior adds random jitter to prevent the **thundering herd** problem when multiple services retry simultaneously.
+</Callout>

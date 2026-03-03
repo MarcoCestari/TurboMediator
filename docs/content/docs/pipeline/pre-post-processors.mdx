@@ -1,0 +1,153 @@
+---
+title: Pre & Post Processors
+description: Running logic before and after handler execution
+---
+
+Pre-processors and post-processors provide a simpler alternative to full pipeline behaviors when you only need to run logic before or after the handler.
+
+## IMessagePreProcessor
+
+Runs **before** the handler executes:
+
+```csharp
+public interface IMessagePreProcessor<in TMessage>
+    where TMessage : IMessage
+{
+    ValueTask Process(TMessage message, CancellationToken cancellationToken);
+}
+```
+
+### Example: Validation Pre-Processor
+
+```csharp
+public class ValidationPreProcessor<TMessage>
+    : IMessagePreProcessor<TMessage>
+    where TMessage : IMessage
+{
+    private readonly ILogger<ValidationPreProcessor<TMessage>> _logger;
+
+    public ValidationPreProcessor(ILogger<ValidationPreProcessor<TMessage>> logger)
+    {
+        _logger = logger;
+    }
+
+    public ValueTask Process(TMessage message, CancellationToken ct)
+    {
+        _logger.LogDebug("Validating {MessageType}: {@Message}",
+            typeof(TMessage).Name, message);
+
+        // Perform custom validation logic
+        if (message is null)
+            throw new ArgumentNullException(nameof(message));
+
+        return default;
+    }
+}
+```
+
+### Example: Enrichment Pre-Processor
+
+```csharp
+public class TimestampPreProcessor<TMessage>
+    : IMessagePreProcessor<TMessage>
+    where TMessage : IMessage
+{
+    private readonly IMediatorContextAccessor _contextAccessor;
+
+    public TimestampPreProcessor(IMediatorContextAccessor contextAccessor)
+    {
+        _contextAccessor = contextAccessor;
+    }
+
+    public ValueTask Process(TMessage message, CancellationToken ct)
+    {
+        _contextAccessor.Context?.Items["RequestTimestamp"] = DateTime.UtcNow;
+        return default;
+    }
+}
+```
+
+## IMessagePostProcessor
+
+Runs **after** the handler returns successfully:
+
+```csharp
+public interface IMessagePostProcessor<in TMessage, in TResponse>
+    where TMessage : IMessage
+{
+    ValueTask Process(
+        TMessage message,
+        TResponse response,
+        CancellationToken cancellationToken);
+}
+```
+
+### Example: Audit Post-Processor
+
+```csharp
+public class AuditPostProcessor<TMessage, TResponse>
+    : IMessagePostProcessor<TMessage, TResponse>
+    where TMessage : IMessage
+{
+    private readonly ILogger<AuditPostProcessor<TMessage, TResponse>> _logger;
+
+    public AuditPostProcessor(ILogger<AuditPostProcessor<TMessage, TResponse>> logger)
+    {
+        _logger = logger;
+    }
+
+    public ValueTask Process(TMessage message, TResponse response, CancellationToken ct)
+    {
+        _logger.LogInformation(
+            "Completed {MessageType} with response: {@Response}",
+            typeof(TMessage).Name, response);
+        return default;
+    }
+}
+```
+
+### Example: Cache Invalidation Post-Processor
+
+```csharp
+public class CacheInvalidationPostProcessor<TCommand, TResponse>
+    : IMessagePostProcessor<TCommand, TResponse>
+    where TCommand : IBaseCommand
+{
+    private readonly ICacheProvider _cache;
+
+    public CacheInvalidationPostProcessor(ICacheProvider cache)
+    {
+        _cache = cache;
+    }
+
+    public async ValueTask Process(TCommand message, TResponse response, CancellationToken ct)
+    {
+        // Invalidate related cache entries after a command
+        var cacheKey = $"cache:{typeof(TCommand).Name}";
+        await _cache.RemoveAsync(cacheKey);
+    }
+}
+```
+
+## Registration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    // Register pre-processors
+    m.WithPreProcessor<ValidationPreProcessor<PingRequest>>();
+    m.WithPreProcessor<TimestampPreProcessor<IMessage>>();
+
+    // Register post-processors
+    m.WithPostProcessor<AuditPostProcessor<PingRequest, string>>();
+    m.WithPostProcessor<CacheInvalidationPostProcessor<IBaseCommand, object>>();
+});
+```
+
+## Execution Order
+
+```
+PreProcessor[1] → PreProcessor[2] → ... → Pipeline Behaviors → Handler → PostProcessor[1] → PostProcessor[2]
+```
+
+Pre-processors run in registration order before the pipeline chain. Post-processors run in registration order after the handler completes successfully.

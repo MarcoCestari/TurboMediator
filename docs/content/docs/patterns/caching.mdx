@@ -1,0 +1,190 @@
+---
+title: Caching
+description: Automatic response caching with attribute-based configuration
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+The `TurboMediator.Caching` package provides automatic handler response caching based on attributes, avoiding redundant processing for the same input.
+
+## Installation
+
+```bash
+dotnet add package TurboMediator.Caching
+```
+
+## Using the Attribute
+
+```csharp
+[Cacheable(durationSeconds: 300)] // Cache for 5 minutes
+public record GetProductQuery(Guid Id) : IQuery<Product>;
+
+[Cacheable(durationSeconds: 60, UseSlidingExpiration = true)]
+public record GetConfigQuery(string Key) : IQuery<string>;
+
+[Cacheable(durationSeconds: 600, KeyPrefix = "catalog")]
+public record GetCatalogQuery(string Category) : IQuery<Catalog>;
+```
+
+### Attribute Properties
+
+| Property | Description |
+|---|---|
+| `durationSeconds` | Cache duration |
+| `KeyPrefix` | Optional prefix for cache keys |
+| `UseSlidingExpiration` | Reset expiration on each access |
+
+## Cache Key Generation
+
+By default, cache keys are generated using a **SHA256 hash** of the serialized message. For custom keys, implement `ICacheKeyProvider`:
+
+```csharp
+public record GetUserQuery(Guid Id) : IQuery<User>, ICacheKeyProvider
+{
+    public string GetCacheKey() => $"user:{Id}";
+}
+```
+
+## Cache Providers
+
+### In-Memory (Built-in)
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithCaching<IQuery<object>, object>();
+    m.WithInMemoryCache();
+});
+```
+
+### Redis (Official Package)
+
+Install the Redis provider:
+
+```bash
+dotnet add package TurboMediator.Caching.Redis
+```
+
+Register with a connection string:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithCaching<IQuery<object>, object>();
+    m.WithRedisCache("localhost:6379");
+});
+```
+
+Or configure with full options:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithCaching<IQuery<object>, object>();
+    m.WithRedisCache(options =>
+    {
+        options.ConnectionString = "localhost:6379";
+        options.Database = 1;
+        options.KeyPrefix = "myapp";
+        options.SerializerOptions = new JsonSerializerOptions
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        };
+    });
+});
+```
+
+You can also reuse an existing `IConnectionMultiplexer`:
+
+```csharp
+var redis = ConnectionMultiplexer.Connect("localhost:6379");
+builder.Services.AddSingleton<IConnectionMultiplexer>(redis);
+
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithRedisCache(redis, options =>
+    {
+        options.KeyPrefix = "myapp";
+    });
+});
+```
+
+#### Redis Features
+
+| Feature | Description |
+|---|---|
+| **Key Prefix** | Isolate cache entries per application with `KeyPrefix` |
+| **Sliding Expiration** | Automatically renews TTL on each cache access |
+| **Database Selection** | Target a specific Redis database number |
+| **Custom Serialization** | Configure `JsonSerializerOptions` for serialization |
+| **Connection Reuse** | Pass an existing `IConnectionMultiplexer` to avoid duplicate connections |
+
+### Custom Provider
+
+Implement `ICacheProvider`:
+
+```csharp
+public interface ICacheProvider
+{
+    ValueTask<CacheResult<T>> GetAsync<T>(string key, CancellationToken cancellationToken = default);
+    ValueTask SetAsync<T>(string key, T value, CacheEntryOptions options, CancellationToken cancellationToken = default);
+    ValueTask RemoveAsync(string key, CancellationToken cancellationToken = default);
+}
+```
+
+Register it:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithCacheProvider<MyCustomCacheProvider>();
+});
+```
+
+## Practical Example
+
+```csharp
+// Cacheable query
+[Cacheable(durationSeconds: 120, KeyPrefix = "products")]
+public record GetPopularProductsQuery(string Category, int Limit)
+    : IQuery<IReadOnlyList<Product>>, ICacheKeyProvider
+{
+    public string GetCacheKey() => $"popular:{Category}:{Limit}";
+}
+
+// Handler — only called on cache miss
+public class GetPopularProductsHandler
+    : IQueryHandler<GetPopularProductsQuery, IReadOnlyList<Product>>
+{
+    private readonly IProductRepository _repo;
+
+    public GetPopularProductsHandler(IProductRepository repo) => _repo = repo;
+
+    public async ValueTask<IReadOnlyList<Product>> Handle(
+        GetPopularProductsQuery query, CancellationToken ct)
+    {
+        return await _repo.GetPopularByCategory(query.Category, query.Limit, ct);
+    }
+}
+
+// Cache invalidation after write
+public class UpdateProductHandler : ICommandHandler<UpdateProductCommand>
+{
+    private readonly ICacheProvider _cache;
+
+    public UpdateProductHandler(ICacheProvider cache) => _cache = cache;
+
+    public async ValueTask<Unit> Handle(UpdateProductCommand command, CancellationToken ct)
+    {
+        // Update product...
+
+        // Invalidate cache
+        await _cache.RemoveAsync($"products:popular:{command.Category}:{10}");
+        return Unit.Value;
+    }
+}
+```
+
+<Callout type="info">
+Caching is most effective for queries (read operations). Avoid caching commands that have side effects.
+</Callout>
