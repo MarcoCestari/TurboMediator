@@ -3,7 +3,6 @@
 A high-performance, enterprise-grade Mediator library for .NET using Source Generators. Zero reflection, Native AOT compatible, and compile-time validated.
 
 ![CI](https://github.com/marcocestari/TurboMediator/workflows/CI/badge.svg)
-[![NuGet Downloads](https://img.shields.io/nuget/dt/TurboMediator.svg)](https://www.nuget.org/packages/TurboMediator)
 [![NuGet Version](https://img.shields.io/nuget/vpre/TurboMediator.svg)](https://www.nuget.org/packages/TurboMediator)
 [![License](https://img.shields.io/badge/license-MIT-green)]()
 
