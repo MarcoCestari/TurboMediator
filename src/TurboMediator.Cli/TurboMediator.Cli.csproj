@@ -17,10 +17,6 @@
     <Description>CLI tool for TurboMediator - analyze handlers, generate docs, health checks, and benchmarks</Description>
     <PackageTags>mediator;cli;tool;analyzer;documentation</PackageTags>
 
-    <!-- Trimming for smaller tool size -->
-    <PublishSingleFile>true</PublishSingleFile>
-    <SelfContained>false</SelfContained>
-
     <!-- Assembly info -->
     <RootNamespace>TurboMediator.Cli</RootNamespace>
     <AssemblyName>dotnet-turbo</AssemblyName>
