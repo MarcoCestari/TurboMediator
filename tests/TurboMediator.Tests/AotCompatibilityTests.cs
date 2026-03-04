@@ -376,7 +376,7 @@ public class AotPublishIntegrationTests
         return Path.Combine(repoRoot, ".idea", "AotSandbox");
     }
 
-    [Fact]
+    [Fact(Skip = "Requires local AotSandbox project and Native AOT toolchain. Run manually with: dotnet test --filter AotPublish")]
     public async Task AotPublish_NoTurboMediatorTrimWarnings()
     {
         var projectDir = GetAotSandboxPath();
@@ -427,7 +427,7 @@ public class AotPublishIntegrationTests
             string.Join("\n", turboWarnings));
     }
 
-    [Fact]
+    [Fact(Skip = "Requires local AotSandbox project and Native AOT toolchain. Run manually with: dotnet test --filter AotExe")]
     public async Task AotExe_RunsAllExamplesSuccessfully()
     {
         var projectDir = GetAotSandboxPath();
