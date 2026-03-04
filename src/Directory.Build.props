@@ -1,7 +1,6 @@
 <Project>
 
   <PropertyGroup>
-    <Version>0.9.0</Version>
     <Authors>Marco Cestari</Authors>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/marcocestari/TurboMediator</RepositoryUrl>
@@ -9,9 +8,12 @@
     <PackageProjectUrl>https://www.turbomediator.com</PackageProjectUrl>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.nuget.md</PackageReadmeFile>
+    <MinVerTagPrefix>v</MinVerTagPrefix>
+    <MinVerDefaultPreReleaseIdentifiers>preview.0</MinVerDefaultPreReleaseIdentifiers>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="MinVer" Version="6.*" PrivateAssets="all" />
     <None Include="$(MSBuildThisFileDirectory)..\assets\icon.png" Pack="true" PackagePath="\" />
     <None Include="$(MSBuildThisFileDirectory)..\assets\README.nuget.md" Pack="true" PackagePath="\" Condition="Exists('$(MSBuildThisFileDirectory)..\assets\README.nuget.md')" />
   </ItemGroup>
