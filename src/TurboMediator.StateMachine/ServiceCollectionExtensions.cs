@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -25,7 +26,7 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TStore">The transition store implementation type.</typeparam>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddTransitionStore<TStore>(this IServiceCollection services)
+    public static IServiceCollection AddTransitionStore<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>(this IServiceCollection services)
         where TStore : class, ITransitionStore
     {
         services.TryAddSingleton<ITransitionStore, TStore>();
@@ -41,7 +42,7 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TTrigger">The trigger enum type.</typeparam>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddStateMachine<TStateMachine, TEntity, TState, TTrigger>(this IServiceCollection services)
+    public static IServiceCollection AddStateMachine<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStateMachine, TEntity, TState, TTrigger>(this IServiceCollection services)
         where TStateMachine : StateMachine<TEntity, TState, TTrigger>
         where TEntity : IStateful<TState>
         where TState : struct, Enum

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -102,23 +103,10 @@ public sealed class TurboMediatorBuilder
     /// <typeparam name="TBehavior">The type of pipeline behavior.</typeparam>
     /// <param name="lifetime">The service lifetime. Default is Singleton.</param>
     /// <returns>The builder for chaining.</returns>
-    public TurboMediatorBuilder WithPipelineBehavior<TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
+    public TurboMediatorBuilder WithPipelineBehavior<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
         where TBehavior : class
     {
         _configurationActions.Add(services => RegisterBehavior<TBehavior>(services, typeof(IPipelineBehavior<,>), lifetime));
-        return this;
-    }
-
-    /// <summary>
-    /// Adds a pipeline behavior with a factory.
-    /// </summary>
-    /// <typeparam name="TBehavior">The type of pipeline behavior.</typeparam>
-    /// <param name="factory">The factory to create the behavior.</param>
-    /// <returns>The builder for chaining.</returns>
-    public TurboMediatorBuilder WithPipelineBehavior<TBehavior>(Func<IServiceProvider, TBehavior> factory)
-        where TBehavior : class
-    {
-        _configurationActions.Add(services => services.AddScoped(factory));
         return this;
     }
 
@@ -128,7 +116,7 @@ public sealed class TurboMediatorBuilder
     /// <typeparam name="TPreProcessor">The type of pre-processor.</typeparam>
     /// <param name="lifetime">The service lifetime. Default is Singleton.</param>
     /// <returns>The builder for chaining.</returns>
-    public TurboMediatorBuilder WithPreProcessor<TPreProcessor>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
+    public TurboMediatorBuilder WithPreProcessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TPreProcessor>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
         where TPreProcessor : class
     {
         _configurationActions.Add(services => RegisterBehavior<TPreProcessor>(services, typeof(IMessagePreProcessor<>), lifetime));
@@ -141,7 +129,7 @@ public sealed class TurboMediatorBuilder
     /// <typeparam name="TPostProcessor">The type of post-processor.</typeparam>
     /// <param name="lifetime">The service lifetime. Default is Singleton.</param>
     /// <returns>The builder for chaining.</returns>
-    public TurboMediatorBuilder WithPostProcessor<TPostProcessor>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
+    public TurboMediatorBuilder WithPostProcessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TPostProcessor>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
         where TPostProcessor : class
     {
         _configurationActions.Add(services => RegisterBehavior<TPostProcessor>(services, typeof(IMessagePostProcessor<,>), lifetime));
@@ -154,7 +142,7 @@ public sealed class TurboMediatorBuilder
     /// <typeparam name="TExceptionHandler">The type of exception handler.</typeparam>
     /// <param name="lifetime">The service lifetime. Default is Singleton.</param>
     /// <returns>The builder for chaining.</returns>
-    public TurboMediatorBuilder WithExceptionHandler<TExceptionHandler>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
+    public TurboMediatorBuilder WithExceptionHandler<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TExceptionHandler>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
         where TExceptionHandler : class
     {
         _configurationActions.Add(services => RegisterBehavior<TExceptionHandler>(services, typeof(IMessageExceptionHandler<,,>), lifetime));
@@ -171,7 +159,7 @@ public sealed class TurboMediatorBuilder
     /// <typeparam name="TBehavior">The type of stream pipeline behavior.</typeparam>
     /// <param name="lifetime">The service lifetime. Default is Singleton.</param>
     /// <returns>The builder for chaining.</returns>
-    public TurboMediatorBuilder WithStreamPipelineBehavior<TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
+    public TurboMediatorBuilder WithStreamPipelineBehavior<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
         where TBehavior : class
     {
         _configurationActions.Add(services => RegisterBehavior<TBehavior>(services, typeof(IStreamPipelineBehavior<,>), lifetime));
@@ -184,7 +172,7 @@ public sealed class TurboMediatorBuilder
     /// <typeparam name="TPreProcessor">The type of stream pre-processor.</typeparam>
     /// <param name="lifetime">The service lifetime. Default is Singleton.</param>
     /// <returns>The builder for chaining.</returns>
-    public TurboMediatorBuilder WithStreamPreProcessor<TPreProcessor>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
+    public TurboMediatorBuilder WithStreamPreProcessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TPreProcessor>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
         where TPreProcessor : class
     {
         _configurationActions.Add(services => RegisterBehavior<TPreProcessor>(services, typeof(IStreamPreProcessor<>), lifetime));
@@ -197,7 +185,7 @@ public sealed class TurboMediatorBuilder
     /// <typeparam name="TPostProcessor">The type of stream post-processor.</typeparam>
     /// <param name="lifetime">The service lifetime. Default is Singleton.</param>
     /// <returns>The builder for chaining.</returns>
-    public TurboMediatorBuilder WithStreamPostProcessor<TPostProcessor>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
+    public TurboMediatorBuilder WithStreamPostProcessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TPostProcessor>(ServiceLifetime lifetime = ServiceLifetime.Singleton)
         where TPostProcessor : class
     {
         _configurationActions.Add(services => RegisterBehavior<TPostProcessor>(services, typeof(IStreamPostProcessor<,>), lifetime));
@@ -238,8 +226,11 @@ public sealed class TurboMediatorBuilder
 
     /// <summary>
     /// Registers a behavior type by scanning its interfaces and registering them.
+    /// The <see cref="DynamicallyAccessedMembersAttribute"/> on TBehavior ensures the trimmer
+    /// preserves the constructors needed for DI activation in Native AOT.
     /// </summary>
-    internal static void RegisterBehavior<TBehavior>(IServiceCollection services, Type interfaceType, ServiceLifetime lifetime)
+    internal static void RegisterBehavior<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(
+        IServiceCollection services, Type interfaceType, ServiceLifetime lifetime)
         where TBehavior : class
     {
         var behaviorType = typeof(TBehavior);

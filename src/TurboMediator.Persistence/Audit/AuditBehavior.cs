@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Text.Json;
@@ -16,7 +17,7 @@ namespace TurboMediator.Persistence.Audit;
 /// </summary>
 /// <typeparam name="TMessage">The type of message being handled.</typeparam>
 /// <typeparam name="TResponse">The type of response from the handler.</typeparam>
-public class AuditBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
+public class AuditBehavior<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
     private readonly IAuditStore _auditStore;

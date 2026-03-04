@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -26,7 +27,7 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TProvider">The provider implementation type.</typeparam>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddFeatureFlagProvider<TProvider>(this IServiceCollection services)
+    public static IServiceCollection AddFeatureFlagProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProvider>(this IServiceCollection services)
         where TProvider : class, IFeatureFlagProvider
     {
         services.TryAddSingleton<IFeatureFlagProvider, TProvider>();

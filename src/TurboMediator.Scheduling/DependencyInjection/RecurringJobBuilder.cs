@@ -114,8 +114,13 @@ public sealed class RecurringJobBuilder<TCommand, TResponse>
             throw new InvalidOperationException(
                 $"Job '{_jobId}' must have either a cron expression (WithCron) or an interval (Every/Hourly/Daily/Weekly).");
 
-        // Create the command payload
-        var command = _factory != null ? _factory() : Activator.CreateInstance<TCommand>();
+        // Create the command payload. Factory is required — avoids Activator.CreateInstance reflection.
+        if (_factory == null)
+            throw new InvalidOperationException(
+                $"Job '{_jobId}' must have a data factory configured via WithData(). " +
+                "This is required to avoid reflection-based activation (Activator.CreateInstance).");
+
+        var command = _factory();
         var payload = JsonSerializer.Serialize(command, typeof(TCommand));
 
         // Calculate initial NextRunAt

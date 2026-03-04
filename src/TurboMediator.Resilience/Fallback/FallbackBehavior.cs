@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
@@ -130,7 +131,8 @@ public class FallbackBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage,
         return fallbackInfo.ExceptionTypes.Any(t => t.IsInstanceOfType(exception));
     }
 
-    private IFallbackHandler<TMessage, TResponse>? ResolveFallbackHandler(Type handlerType)
+    private IFallbackHandler<TMessage, TResponse>? ResolveFallbackHandler(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type handlerType)
     {
         // Try to resolve from DI first
         var handler = _serviceProvider.GetService(handlerType);

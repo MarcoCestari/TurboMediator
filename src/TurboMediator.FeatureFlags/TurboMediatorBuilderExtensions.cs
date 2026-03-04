@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -69,7 +70,7 @@ public sealed class FeatureFlagBuilder
     /// </summary>
     /// <typeparam name="TProvider">The provider type.</typeparam>
     /// <returns>The builder for chaining.</returns>
-    public FeatureFlagBuilder UseProvider<TProvider>()
+    public FeatureFlagBuilder UseProvider<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProvider>()
         where TProvider : class, IFeatureFlagProvider
     {
         _services.TryAddSingleton<IFeatureFlagProvider, TProvider>();

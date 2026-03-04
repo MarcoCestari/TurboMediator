@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using TurboMediator.Persistence.Inbox;
@@ -19,8 +20,11 @@ public sealed class OutboxBuilder
     private bool _addProcessor;
     private bool _addRouter;
     private bool _addInbox;
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     private Type? _customStoreType;
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     private Type? _deadLetterHandlerType;
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     private Type? _inboxStoreType;
 
     internal OutboxBuilder(IServiceCollection services)
@@ -40,7 +44,7 @@ public sealed class OutboxBuilder
     /// </summary>
     /// <typeparam name="TStore">The store type implementing IOutboxStore.</typeparam>
     /// <returns>The builder for chaining.</returns>
-    public OutboxBuilder UseStore<TStore>()
+    public OutboxBuilder UseStore<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>()
         where TStore : class, IOutboxStore
     {
         _customStoreType = typeof(TStore);
@@ -226,7 +230,7 @@ public sealed class OutboxBuilder
     /// </summary>
     /// <typeparam name="THandler">The dead letter handler type implementing IOutboxDeadLetterHandler.</typeparam>
     /// <returns>The builder for chaining.</returns>
-    public OutboxBuilder WithDeadLetterHandler<THandler>()
+    public OutboxBuilder WithDeadLetterHandler<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>()
         where THandler : class, IOutboxDeadLetterHandler
     {
         _deadLetterHandlerType = typeof(THandler);
@@ -252,7 +256,7 @@ public sealed class OutboxBuilder
     /// </summary>
     /// <typeparam name="TStore">The inbox store type implementing IInboxStore.</typeparam>
     /// <returns>The builder for chaining.</returns>
-    public OutboxBuilder WithInbox<TStore>()
+    public OutboxBuilder WithInbox<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>()
         where TStore : class, IInboxStore
     {
         _addInbox = true;

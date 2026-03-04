@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -25,7 +26,7 @@ public static class ServiceCollectionExtensions
     /// <typeparam name="TStore">The saga store implementation type.</typeparam>
     /// <param name="services">The service collection.</param>
     /// <returns>The service collection for chaining.</returns>
-    public static IServiceCollection AddSagaStore<TStore>(this IServiceCollection services)
+    public static IServiceCollection AddSagaStore<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>(this IServiceCollection services)
         where TStore : class, ISagaStore
     {
         services.TryAddSingleton<ISagaStore, TStore>();

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -73,7 +74,7 @@ public sealed class StateMachineRegistrationBuilder
     /// </summary>
     /// <typeparam name="TStore">The transition store type.</typeparam>
     /// <returns>This builder for chaining.</returns>
-    public StateMachineRegistrationBuilder UseStore<TStore>()
+    public StateMachineRegistrationBuilder UseStore<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>()
         where TStore : class, ITransitionStore
     {
         _services.TryAddSingleton<ITransitionStore, TStore>();
@@ -88,7 +89,7 @@ public sealed class StateMachineRegistrationBuilder
     /// <typeparam name="TState">The state enum type.</typeparam>
     /// <typeparam name="TTrigger">The trigger enum type.</typeparam>
     /// <returns>This builder for chaining.</returns>
-    public StateMachineRegistrationBuilder AddStateMachine<TStateMachine, TEntity, TState, TTrigger>()
+    public StateMachineRegistrationBuilder AddStateMachine<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStateMachine, TEntity, TState, TTrigger>()
         where TStateMachine : StateMachine<TEntity, TState, TTrigger>
         where TEntity : IStateful<TState>
         where TState : struct, Enum

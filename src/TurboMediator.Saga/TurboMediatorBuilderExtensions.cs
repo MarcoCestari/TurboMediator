@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -66,7 +67,7 @@ public sealed class SagaBuilder
     /// </summary>
     /// <typeparam name="TStore">The saga store type.</typeparam>
     /// <returns>The builder for chaining.</returns>
-    public SagaBuilder UseStore<TStore>()
+    public SagaBuilder UseStore<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TStore>()
         where TStore : class, ISagaStore
     {
         _services.TryAddSingleton<ISagaStore, TStore>();

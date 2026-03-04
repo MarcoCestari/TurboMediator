@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -10,7 +11,7 @@ namespace TurboMediator.StateMachine;
 /// <typeparam name="TEntity">The entity type implementing <see cref="IStateful{TState}"/>.</typeparam>
 /// <typeparam name="TState">The state enum type.</typeparam>
 /// <typeparam name="TTrigger">The trigger enum type.</typeparam>
-public abstract class StateMachine<TEntity, TState, TTrigger> : IStateMachine<TEntity, TState, TTrigger>
+public abstract class StateMachine<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] TEntity, TState, TTrigger> : IStateMachine<TEntity, TState, TTrigger>
     where TEntity : IStateful<TState>
     where TState : struct, Enum
     where TTrigger : struct, Enum

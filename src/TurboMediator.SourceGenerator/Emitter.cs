@@ -20,6 +20,7 @@ internal static class Emitter
         sb.AppendLine();
         sb.AppendLine("using System;");
         sb.AppendLine("using System.Collections.Generic;");
+        sb.AppendLine("using System.Diagnostics.CodeAnalysis;");
         sb.AppendLine("using System.Linq;");
         sb.AppendLine("using System.Runtime.CompilerServices;");
         sb.AppendLine("using System.Threading;");
@@ -466,12 +467,11 @@ internal static class Emitter
         sb.AppendLine("        /// <summary>");
         sb.AppendLine("        /// Adds a pipeline behavior to the service collection.");
         sb.AppendLine("        /// </summary>");
-        sb.AppendLine("        public static IServiceCollection AddPipelineBehavior<TBehavior>(");
+        sb.AppendLine("        public static IServiceCollection AddPipelineBehavior<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(");
         sb.AppendLine("            this IServiceCollection services,");
         sb.AppendLine("            ServiceLifetime lifetime = ServiceLifetime.Singleton)");
         sb.AppendLine("            where TBehavior : class");
         sb.AppendLine("        {");
-        sb.AppendLine("            // Get all IPipelineBehavior<,> interfaces implemented by TBehavior");
         sb.AppendLine("            var behaviorType = typeof(TBehavior);");
         sb.AppendLine("            var pipelineInterfaces = behaviorType.GetInterfaces()");
         sb.AppendLine("                .Where(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IPipelineBehavior<,>));");
@@ -487,7 +487,7 @@ internal static class Emitter
         sb.AppendLine("        /// <summary>");
         sb.AppendLine("        /// Adds a pre-processor to the service collection.");
         sb.AppendLine("        /// </summary>");
-        sb.AppendLine("        public static IServiceCollection AddPreProcessor<TProcessor>(");
+        sb.AppendLine("        public static IServiceCollection AddPreProcessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProcessor>(");
         sb.AppendLine("            this IServiceCollection services,");
         sb.AppendLine("            ServiceLifetime lifetime = ServiceLifetime.Singleton)");
         sb.AppendLine("            where TProcessor : class");
@@ -507,7 +507,7 @@ internal static class Emitter
         sb.AppendLine("        /// <summary>");
         sb.AppendLine("        /// Adds a post-processor to the service collection.");
         sb.AppendLine("        /// </summary>");
-        sb.AppendLine("        public static IServiceCollection AddPostProcessor<TProcessor>(");
+        sb.AppendLine("        public static IServiceCollection AddPostProcessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProcessor>(");
         sb.AppendLine("            this IServiceCollection services,");
         sb.AppendLine("            ServiceLifetime lifetime = ServiceLifetime.Singleton)");
         sb.AppendLine("            where TProcessor : class");
@@ -527,7 +527,7 @@ internal static class Emitter
         sb.AppendLine("        /// <summary>");
         sb.AppendLine("        /// Adds an exception handler to the service collection.");
         sb.AppendLine("        /// </summary>");
-        sb.AppendLine("        public static IServiceCollection AddExceptionHandler<THandler>(");
+        sb.AppendLine("        public static IServiceCollection AddExceptionHandler<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] THandler>(");
         sb.AppendLine("            this IServiceCollection services,");
         sb.AppendLine("            ServiceLifetime lifetime = ServiceLifetime.Singleton)");
         sb.AppendLine("            where THandler : class");
@@ -547,7 +547,7 @@ internal static class Emitter
         sb.AppendLine("        /// <summary>");
         sb.AppendLine("        /// Adds a stream pipeline behavior to the service collection.");
         sb.AppendLine("        /// </summary>");
-        sb.AppendLine("        public static IServiceCollection AddStreamPipelineBehavior<TBehavior>(");
+        sb.AppendLine("        public static IServiceCollection AddStreamPipelineBehavior<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TBehavior>(");
         sb.AppendLine("            this IServiceCollection services,");
         sb.AppendLine("            ServiceLifetime lifetime = ServiceLifetime.Singleton)");
         sb.AppendLine("            where TBehavior : class");
@@ -567,7 +567,7 @@ internal static class Emitter
         sb.AppendLine("        /// <summary>");
         sb.AppendLine("        /// Adds a stream pre-processor to the service collection.");
         sb.AppendLine("        /// </summary>");
-        sb.AppendLine("        public static IServiceCollection AddStreamPreProcessor<TProcessor>(");
+        sb.AppendLine("        public static IServiceCollection AddStreamPreProcessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProcessor>(");
         sb.AppendLine("            this IServiceCollection services,");
         sb.AppendLine("            ServiceLifetime lifetime = ServiceLifetime.Singleton)");
         sb.AppendLine("            where TProcessor : class");
@@ -587,7 +587,7 @@ internal static class Emitter
         sb.AppendLine("        /// <summary>");
         sb.AppendLine("        /// Adds a stream post-processor to the service collection.");
         sb.AppendLine("        /// </summary>");
-        sb.AppendLine("        public static IServiceCollection AddStreamPostProcessor<TProcessor>(");
+        sb.AppendLine("        public static IServiceCollection AddStreamPostProcessor<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TProcessor>(");
         sb.AppendLine("            this IServiceCollection services,");
         sb.AppendLine("            ServiceLifetime lifetime = ServiceLifetime.Singleton)");
         sb.AppendLine("            where TProcessor : class");

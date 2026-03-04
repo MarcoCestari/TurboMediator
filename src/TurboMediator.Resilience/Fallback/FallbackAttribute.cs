@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace TurboMediator.Resilience.Fallback;
 
@@ -12,6 +13,7 @@ public sealed class FallbackAttribute : Attribute
     /// <summary>
     /// Gets the type of the fallback handler.
     /// </summary>
+    [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)]
     public Type FallbackHandlerType { get; }
 
     /// <summary>
@@ -31,7 +33,8 @@ public sealed class FallbackAttribute : Attribute
     /// </summary>
     /// <param name="fallbackHandlerType">The type implementing IFallbackHandler.</param>
     /// <exception cref="ArgumentNullException">Thrown when fallbackHandlerType is null.</exception>
-    public FallbackAttribute(Type fallbackHandlerType)
+    public FallbackAttribute(
+        [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] Type fallbackHandlerType)
     {
         FallbackHandlerType = fallbackHandlerType ?? throw new ArgumentNullException(nameof(fallbackHandlerType));
     }
