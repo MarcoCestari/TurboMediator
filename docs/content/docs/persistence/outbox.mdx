@@ -11,7 +11,7 @@ The outbox pattern ensures reliable notification delivery by storing notificatio
 
 1. When a notification is published, it's serialized and stored in the outbox table (within the current transaction)
 2. The transaction commits atomically — both business data and outbox messages
-3. A background processor picks up pending outbox messages and publishes them
+3. A background processor picks up pending outbox messages and publishes them to an external message broker (via `IOutboxMessageBrokerPublisher`)
 
 This ensures **at-least-once delivery** — notifications are never lost even if the application crashes after the transaction commits.
 
@@ -81,7 +81,15 @@ Mark notifications for outbox delivery:
 [WithOutbox]
 public record OrderCreatedNotification(Guid OrderId) : INotification;
 
-// With custom retry settings
+// With a specific destination (queue/topic)
+[WithOutbox("orders-queue")]
+public record OrderShippedNotification(Guid OrderId) : INotification;
+
+// With destination, partition key, and custom retry settings
+[WithOutbox("payments", PartitionKey = nameof(PaymentProcessedNotification.OrderId), MaxRetries = 10)]
+public record PaymentProcessedNotification(Guid OrderId, decimal Amount) : INotification;
+
+// Without destination but with custom settings
 [WithOutbox(MaxRetries = 10, PublishImmediately = true)]
 public record CriticalNotification(string Data) : INotification;
 ```
@@ -125,6 +133,216 @@ public class PlaceOrderHandler : ICommandHandler<PlaceOrderCommand, Order>
 <Callout type="warn">
 The outbox pattern provides **at-least-once delivery**. Your notification handlers must be **idempotent** — designed to handle the same notification being delivered more than once. See the [Inbox Pattern](/docs/persistence/inbox) for built-in deduplication on the consumer side.
 </Callout>
+
+## Message Broker Integration
+
+By default the outbox processor marks messages as processed without forwarding them anywhere. To actually deliver messages to an external broker (RabbitMQ, Azure Service Bus, AWS SNS/SQS, Kafka, etc.) you need to:
+
+1. Implement `IOutboxMessageBrokerPublisher`
+2. Register your implementation
+3. Enable broker publishing on the processor
+
+### IOutboxMessageBrokerPublisher
+
+```csharp
+public interface IOutboxMessageBrokerPublisher
+{
+    /// <summary>Publishes to the default destination.</summary>
+    ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default);
+
+    /// <summary>Publishes to a specific destination (queue / topic).</summary>
+    ValueTask PublishAsync(OutboxMessage message, string destination, CancellationToken cancellationToken = default);
+}
+```
+
+The processor calls the two-argument overload when a destination is resolved by the router (see [Message Routing](#message-routing)), and the single-argument overload otherwise.
+
+### Example: RabbitMQ
+
+```csharp
+public class RabbitMqBrokerPublisher : IOutboxMessageBrokerPublisher
+{
+    private readonly IConnection _connection;
+    private readonly ILogger<RabbitMqBrokerPublisher> _logger;
+
+    public RabbitMqBrokerPublisher(IConnection connection, ILogger<RabbitMqBrokerPublisher> logger)
+    {
+        _connection = connection;
+        _logger = logger;
+    }
+
+    public ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+        => PublishAsync(message, "outbox-messages", cancellationToken);
+
+    public ValueTask PublishAsync(OutboxMessage message, string destination, CancellationToken cancellationToken = default)
+    {
+        using var channel = _connection.CreateModel();
+        channel.QueueDeclare(destination, durable: true, exclusive: false, autoDelete: false);
+
+        var body = Encoding.UTF8.GetBytes(message.Payload);
+
+        var props = channel.CreateBasicProperties();
+        props.Persistent = true;
+        props.MessageId = message.Id.ToString();
+        props.Type = message.MessageType;
+        props.CorrelationId = message.CorrelationId;
+
+        // Forward any headers stored on the message
+        if (message.Headers?.Count > 0)
+        {
+            props.Headers = new Dictionary<string, object>(
+                message.Headers.ToDictionary(kv => kv.Key, kv => (object)kv.Value));
+        }
+
+        channel.BasicPublish(exchange: "", routingKey: destination, basicProperties: props, body: body);
+
+        _logger.LogDebug("Published outbox message {Id} to queue '{Queue}'", message.Id, destination);
+        return ValueTask.CompletedTask;
+    }
+}
+```
+
+### Example: Azure Service Bus
+
+```csharp
+public class ServiceBusBrokerPublisher : IOutboxMessageBrokerPublisher
+{
+    private readonly ServiceBusClient _client;
+
+    public ServiceBusBrokerPublisher(ServiceBusClient client) => _client = client;
+
+    public ValueTask PublishAsync(OutboxMessage message, CancellationToken cancellationToken = default)
+        => PublishAsync(message, "outbox-messages", cancellationToken);
+
+    public async ValueTask PublishAsync(OutboxMessage message, string destination, CancellationToken cancellationToken = default)
+    {
+        var sender = _client.CreateSender(destination);
+
+        var sbMessage = new ServiceBusMessage(message.Payload)
+        {
+            MessageId      = message.Id.ToString(),
+            CorrelationId  = message.CorrelationId,
+            ContentType    = "application/json",
+            Subject        = message.MessageType,
+        };
+
+        // Partition key for ordered delivery (set by [WithOutbox("dest", PartitionKey = ...)])
+        if (message.Headers?.TryGetValue("partition-key", out var partitionKey) == true)
+            sbMessage.PartitionKey = partitionKey;
+
+        if (message.Headers is not null)
+            foreach (var (key, value) in message.Headers)
+                sbMessage.ApplicationProperties[key] = value;
+
+        await sender.SendMessageAsync(sbMessage, cancellationToken);
+    }
+}
+```
+
+### Registration
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithOutbox(outbox =>
+    {
+        outbox.AddProcessor()
+              .PublishToMessageBroker()   // enable broker mode
+              .WithMaxRetries(5)
+              .WithBatchSize(50);
+    });
+});
+
+// Register your publisher implementation
+builder.Services.AddScoped<IOutboxMessageBrokerPublisher, RabbitMqBrokerPublisher>();
+// or
+builder.Services.AddScoped<IOutboxMessageBrokerPublisher, ServiceBusBrokerPublisher>();
+```
+
+<Callout type="warn">
+If `PublishToMessageBroker()` is called but **no** `IOutboxMessageBrokerPublisher` is registered, the processor logs a warning and stops processing — messages remain `Pending`. Always register a publisher when broker mode is enabled.
+</Callout>
+
+<Callout type="info">
+When `PublishToMessageBroker()` is **not** called (the default), the processor simply marks messages as `Processed` after they are picked up. This is useful for local development, testing, or scenarios where you consume outbox messages via direct polling instead of a broker.
+</Callout>
+
+## Message Routing
+
+The router decides **which queue or topic** each message type is published to. You can specify the destination directly on the `[WithOutbox]` attribute or use the fluent builder for global configuration.
+
+### Destination via `[WithOutbox]`
+
+Pass the destination as the first argument and an optional `PartitionKey`:
+
+```csharp
+[WithOutbox("orders")]
+public record OrderCreatedNotification(Guid OrderId) : INotification;
+
+// With partition key for ordered delivery (e.g. Azure Service Bus sessions)
+[WithOutbox("payments", PartitionKey = nameof(PaymentProcessedNotification.OrderId))]
+public record PaymentProcessedNotification(Guid OrderId, decimal Amount) : INotification;
+```
+
+The `PartitionKey` property names the **property on the message** whose value is read at publish time and forwarded to the broker (stored in `OutboxMessage.Headers["partition-key"]`).
+
+When no destination is specified (`[WithOutbox]`), the router falls back to naming conventions or the default destination.
+
+### Fluent Routing Configuration
+
+Use the builder to configure global routing behavior:
+
+```csharp
+builder.Services.AddTurboMediator(m =>
+{
+    m.WithOutbox(outbox =>
+    {
+        outbox
+            .AddProcessor()
+            .PublishToMessageBroker()
+            // Auto-generate destination names from the type name
+            .UseKebabCaseNaming()               // OrderCreatedNotification → "order-created-notification"
+            // or: .UseSnakeCaseNaming()          // → "order_created_notification"
+            // or: .UseTypeNameRouting()           // → "OrderCreatedNotification"
+            .WithDestinationPrefix("myapp.")    // "myapp.order-created-notification"
+            .WithDefaultDestination("fallback") // fallback when no rule matches
+            // Explicit per-type overrides
+            .MapType<OrderCreatedNotification>("orders")
+            .MapType<PaymentProcessedNotification>("payments");
+    });
+});
+```
+
+### IOutboxMessageRouter
+
+For advanced scenarios you can replace the default router entirely:
+
+```csharp
+public interface IOutboxMessageRouter
+{
+    string  GetDestination(string messageType);
+    string  GetDestination<T>();
+    string  GetDestination(Type type);
+    string? GetPartitionKey(string messageType);
+    string? GetPartitionKey<T>();
+    string? GetPartitionKey(Type type);
+}
+```
+
+Register a custom implementation via DI:
+
+```csharp
+builder.Services.AddSingleton<IOutboxMessageRouter, MyCustomRouter>();
+```
+
+### Routing Priority
+
+The default `OutboxMessageRouter` resolves destinations in this order:
+
+1. **Explicit `TypeMappings`** configured via `.MapType<T>()` or `OutboxRoutingOptions.MapType()`
+2. **`[WithOutbox("destination")]`** — destination specified on the attribute
+3. **Naming convention** (`KebabCase` / `SnakeCase` / `TypeName`)
+4. **`DefaultDestination`** (fallback, default value: `"outbox-messages"`)
 
 ## Dead Letter Queue (DLQ)
 

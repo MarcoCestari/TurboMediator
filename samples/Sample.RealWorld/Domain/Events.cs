@@ -32,8 +32,7 @@ public record WorkItemCompletedEvent(
 /// (e.g. Slack, MS Teams, external notification service) consume
 /// this event to notify the assignee outside the platform.
 /// </summary>
-[WithOutbox(MaxRetries = 5)]
-[PublishTo("work-items-assigned")]
+[WithOutbox("work-items-assigned", MaxRetries = 5)]
 public record WorkItemAssignedIntegrationEvent(
     Guid WorkItemId, string Title,
     Guid AssigneeId, string AssigneeName,
@@ -45,8 +44,7 @@ public record WorkItemAssignedIntegrationEvent(
 /// (e.g. billing, analytics, reporting dashboards) consume
 /// this event to track project progress and trigger invoicing.
 /// </summary>
-[WithOutbox(MaxRetries = 5)]
-[PublishTo("work-items-completed")]
+[WithOutbox("work-items-completed", MaxRetries = 5)]
 public record WorkItemCompletedIntegrationEvent(
     Guid WorkItemId, string Title,
     Guid ProjectId, string CompletedBy,

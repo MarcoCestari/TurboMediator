@@ -13,16 +13,16 @@ public class OutboxRoutingTests
 
     public record PaymentProcessedEvent(Guid PaymentId);
 
-    [PublishTo("custom-queue")]
+    [WithOutbox("custom-queue")]
     public record CustomDestinationEvent(string Data);
 
-    [PublishTo("partitioned-queue", PartitionKey = "TenantId")]
+    [WithOutbox("partitioned-queue", PartitionKey = "TenantId")]
     public record PartitionedEvent(string TenantId, string Data);
 
-    [PublishTo("orders-topic", PartitionKey = "OrderId")]
+    [WithOutbox("orders-topic", PartitionKey = "OrderId")]
     public record OrderPlacedEvent(Guid OrderId, string Product) : INotification;
 
-    [PublishTo("payments-queue")]
+    [WithOutbox("payments-queue")]
     public record PaymentCompletedRoutingEvent(Guid PaymentId) : INotification;
 
     public record UnroutedEvent(string Data) : INotification;
@@ -117,7 +117,7 @@ public class OutboxRoutingTests
     }
 
     [Fact]
-    public void Router_ShouldUsePublishToAttribute_WhenPresent()
+    public void Router_ShouldUseWithOutboxDestination_WhenPresent()
     {
         // Arrange
         var options = new OutboxRoutingOptions
@@ -205,11 +205,11 @@ public class OutboxRoutingTests
     }
 
     [Fact]
-    public void PublishToAttribute_ShouldHavePartitionKey()
+    public void WithOutboxAttribute_ShouldHaveDestinationAndPartitionKey()
     {
         // Arrange
         var attr = typeof(PartitionedEvent)
-            .GetCustomAttributes(typeof(PublishToAttribute), true)[0] as PublishToAttribute;
+            .GetCustomAttributes(typeof(WithOutboxAttribute), true)[0] as WithOutboxAttribute;
 
         // Assert
         Assert.NotNull(attr);
@@ -235,7 +235,7 @@ public class OutboxRoutingTests
     // ========================================================================
 
     [Fact]
-    public void GetPartitionKey_ShouldReadFromPublishToAttribute()
+    public void GetPartitionKey_ShouldReadFromWithOutboxAttribute()
     {
         var options = new OutboxRoutingOptions();
         var router = new OutboxMessageRouter(options);

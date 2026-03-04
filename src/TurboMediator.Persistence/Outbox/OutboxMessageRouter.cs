@@ -113,11 +113,11 @@ public class OutboxMessageRouter : IOutboxMessageRouter
             return ApplyPrefix(mapped);
         }
 
-        // 2. Check for PublishToAttribute
-        var publishToAttr = type.GetCustomAttribute<PublishToAttribute>();
-        if (publishToAttr != null)
+        // 2. Check for WithOutboxAttribute with Destination
+        var outboxAttr = type.GetCustomAttribute<WithOutboxAttribute>();
+        if (!string.IsNullOrEmpty(outboxAttr?.Destination))
         {
-            return ApplyPrefix(publishToAttr.Destination);
+            return ApplyPrefix(outboxAttr.Destination);
         }
 
         // 3. Apply naming convention
@@ -127,8 +127,8 @@ public class OutboxMessageRouter : IOutboxMessageRouter
     /// <inheritdoc />
     public string? GetPartitionKey(Type type)
     {
-        var publishToAttr = type.GetCustomAttribute<PublishToAttribute>();
-        return publishToAttr?.PartitionKey;
+        var outboxAttr = type.GetCustomAttribute<WithOutboxAttribute>();
+        return outboxAttr?.PartitionKey;
     }
 
     /// <inheritdoc />
