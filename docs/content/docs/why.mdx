@@ -303,6 +303,23 @@ With a mediator, these problems are **structurally prevented**. The pipeline enf
 
 ---
 
+## The Boilerplate Problem (Why I Built This)
+
+Every time I worked on a real project using a mediator library, I ended up rewriting the same things from scratch:
+
+- Validation wired to FluentValidation
+- Retry and circuit breaker via Polly
+- Logging and tracing with OpenTelemetry and correlation IDs
+- EF Core unit-of-work transaction behavior
+- Per-user/per-tenant rate limiting
+- Test helpers to mock the mediator in unit tests
+
+None of it is hard. But it takes time, it drifts between projects, and you end up owning it forever. Every project had a slightly different version of the same `ValidationBehavior`, the same `LoggingBehavior`, the same test abstractions.
+
+That's what TurboMediator is trying to fix. Not just the mediator dispatch, but the entire surrounding ecosystem — built once, tested together, and ready to use.
+
+---
+
 ## Why TurboMediator Specifically?
 
 If you're convinced the pattern is valuable, why choose TurboMediator over alternatives?
