@@ -32,6 +32,9 @@ internal static class Emitter
         sb.AppendLine($"namespace {namespaceName}");
         sb.AppendLine("{");
 
+        // Generate handler wrapper classes (pre-compiled pipeline chains)
+        GenerateHandlerWrapperClasses(sb, handlers);
+
         // Generate Mediator class
         GenerateMediatorClass(sb, handlers);
 
@@ -43,6 +46,121 @@ internal static class Emitter
         return sb.ToString();
     }
 
+    private static void GenerateHandlerWrapperClasses(StringBuilder sb, ImmutableArray<HandlerInfo> handlers)
+    {
+        var nonStreamingHandlers = handlers.Where(h => !h.IsAbstract && !h.IsStreaming && h.Kind != HandlerKind.Notification).ToList();
+
+        if (nonStreamingHandlers.Count == 0) return;
+
+        sb.AppendLine("    // ================================================================");
+        sb.AppendLine("    // Handler wrappers - pre-compile pipeline chains at construction");
+        sb.AppendLine("    // ================================================================");
+        sb.AppendLine();
+
+        foreach (var handler in nonStreamingHandlers)
+        {
+            var responseType = handler.ResponseTypeFullName ?? "Unit";
+            var handlerInterface = GetHandlerInterface(handler);
+            var wrapperName = GetWrapperClassName(handler);
+
+            sb.AppendLine($"    internal sealed class {wrapperName}");
+            sb.AppendLine("    {");
+            sb.AppendLine($"        private readonly MessageHandlerDelegate<{responseType}> _rootHandler;");
+            sb.AppendLine();
+            sb.AppendLine($"        public {wrapperName}(IServiceProvider sp)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            var concreteHandler = sp.GetRequiredService<{handlerInterface}>();");
+            sb.AppendLine($"            var behaviors = sp.GetServices<IPipelineBehavior<{handler.MessageTypeFullName}, {responseType}>>().ToArray();");
+            sb.AppendLine($"            var preProcessors = sp.GetServices<IMessagePreProcessor<{handler.MessageTypeFullName}>>().ToArray();");
+            sb.AppendLine($"            var postProcessors = sp.GetServices<IMessagePostProcessor<{handler.MessageTypeFullName}, {responseType}>>().ToArray();");
+            sb.AppendLine($"            var exceptionHandlers = sp.GetServices<IMessageExceptionHandler<{handler.MessageTypeFullName}, {responseType}, Exception>>().ToArray();");
+            sb.AppendLine();
+            sb.AppendLine("            // Build the root handler delegate");
+            sb.AppendLine($"            MessageHandlerDelegate<{responseType}> handler = () => concreteHandler.Handle(default!, default);");
+            sb.AppendLine();
+            sb.AppendLine("            // Wrap with pipeline behaviors (innermost first)");
+            sb.AppendLine("            for (int i = behaviors.Length - 1; i >= 0; i--)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var behavior = behaviors[i];");
+            sb.AppendLine("                var currentNext = handler;");
+            sb.AppendLine($"                handler = () => behavior.Handle(default!, currentNext, default);");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            // Store as a template - actual message/ct are captured at call time");
+            sb.AppendLine("            _rootHandler = handler;");
+            sb.AppendLine();
+            sb.AppendLine("            // Re-build with proper closure capture");
+            sb.AppendLine("            // The _handle method will do the actual dispatch");
+            sb.AppendLine("            _concreteHandler = concreteHandler;");
+            sb.AppendLine("            _behaviors = behaviors;");
+            sb.AppendLine("            _preProcessors = preProcessors;");
+            sb.AppendLine("            _postProcessors = postProcessors;");
+            sb.AppendLine("            _exceptionHandlers = exceptionHandlers;");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine($"        private readonly {handlerInterface} _concreteHandler;");
+            sb.AppendLine($"        private readonly IPipelineBehavior<{handler.MessageTypeFullName}, {responseType}>[] _behaviors;");
+            sb.AppendLine($"        private readonly IMessagePreProcessor<{handler.MessageTypeFullName}>[] _preProcessors;");
+            sb.AppendLine($"        private readonly IMessagePostProcessor<{handler.MessageTypeFullName}, {responseType}>[] _postProcessors;");
+            sb.AppendLine($"        private readonly IMessageExceptionHandler<{handler.MessageTypeFullName}, {responseType}, Exception>[] _exceptionHandlers;");
+            sb.AppendLine();
+            sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"        public ValueTask<{responseType}> Handle({handler.MessageTypeFullName} message, CancellationToken cancellationToken)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            // Fast path: no pipeline, no pre/post processors, no exception handlers");
+            sb.AppendLine("            if (_behaviors.Length == 0 && _preProcessors.Length == 0 && _postProcessors.Length == 0 && _exceptionHandlers.Length == 0)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                return _concreteHandler.Handle(message, cancellationToken);");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            return HandleWithPipeline(message, cancellationToken);");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            sb.AppendLine($"        private async ValueTask<{responseType}> HandleWithPipeline({handler.MessageTypeFullName} message, CancellationToken cancellationToken)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            // Pre-processors");
+            sb.AppendLine("            for (int i = 0; i < _preProcessors.Length; i++)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                await _preProcessors[i].Process(message, cancellationToken);");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            // Build pipeline delegate chain with captured message + ct");
+            sb.AppendLine($"            MessageHandlerDelegate<{responseType}> next = () => _concreteHandler.Handle(message, cancellationToken);");
+            sb.AppendLine("            for (int i = _behaviors.Length - 1; i >= 0; i--)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                var behavior = _behaviors[i];");
+            sb.AppendLine("                var currentNext = next;");
+            sb.AppendLine("                next = () => behavior.Handle(message, currentNext, cancellationToken);");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine($"            {responseType} response;");
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+            sb.AppendLine("                response = await next();");
+            sb.AppendLine("            }");
+            sb.AppendLine("            catch (Exception ex)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                for (int i = 0; i < _exceptionHandlers.Length; i++)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    var result = await _exceptionHandlers[i].Handle(message, ex, cancellationToken);");
+            sb.AppendLine("                    if (result.Handled) return result.Response!;");
+            sb.AppendLine("                }");
+            sb.AppendLine("                throw;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            // Post-processors");
+            sb.AppendLine("            for (int i = 0; i < _postProcessors.Length; i++)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                await _postProcessors[i].Process(message, response, cancellationToken);");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            return response;");
+            sb.AppendLine("        }");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+        }
+    }
+
     private static void GenerateMediatorClass(StringBuilder sb, ImmutableArray<HandlerInfo> handlers)
     {
         sb.AppendLine("    /// <summary>");
@@ -52,16 +170,24 @@ internal static class Emitter
         sb.AppendLine("    {");
         sb.AppendLine("        private readonly IServiceProvider _serviceProvider;");
         sb.AppendLine("        private readonly TurboMediatorOptions _options;");
+        sb.AppendLine("        private readonly DICache _cache;");
         sb.AppendLine();
         sb.AppendLine("        public Mediator(IServiceProvider serviceProvider, IOptions<TurboMediatorOptions>? options = null)");
         sb.AppendLine("        {");
         sb.AppendLine("            _serviceProvider = serviceProvider;");
         sb.AppendLine("            _options = options?.Value ?? new TurboMediatorOptions();");
+        sb.AppendLine("            _cache = new DICache(serviceProvider);");
         sb.AppendLine("        }");
         sb.AppendLine();
 
-        // Generate Send methods for requests
-        GenerateSendMethods(sb, handlers);
+        // Generate DICache struct
+        GenerateDICache(sb, handlers);
+
+        // Generate typed Send methods for each concrete message type
+        GenerateTypedSendMethods(sb, handlers);
+
+        // Generate generic Send methods (IRequest<T>, ICommand<T>, IQuery<T>)
+        GenerateGenericSendMethods(sb, handlers);
 
         // Generate Publish method for notifications
         GeneratePublishMethod(sb, handlers);
@@ -69,152 +195,180 @@ internal static class Emitter
         // Generate CreateStream methods
         GenerateStreamMethods(sb, handlers);
 
-        // Generate pipeline helper method
-        GeneratePipelineHelper(sb);
-
         sb.AppendLine("    }");
         sb.AppendLine();
     }
 
-    private static void GeneratePipelineHelper(StringBuilder sb)
+    private static void GenerateDICache(StringBuilder sb, ImmutableArray<HandlerInfo> handlers)
     {
-        sb.AppendLine("        private async ValueTask<TResponse> ExecuteWithPipeline<TMessage, TResponse>(");
-        sb.AppendLine("            TMessage message,");
-        sb.AppendLine("            MessageHandlerDelegate<TResponse> handler,");
-        sb.AppendLine("            CancellationToken cancellationToken)");
-        sb.AppendLine("            where TMessage : IMessage");
+        var nonStreamingHandlers = handlers.Where(h => !h.IsAbstract && !h.IsStreaming && h.Kind != HandlerKind.Notification).ToList();
+        var notificationTypes = handlers.Where(h => !h.IsAbstract && h.Kind == HandlerKind.Notification)
+            .GroupBy(h => h.MessageTypeFullName)
+            .Select(g => g.First())
+            .ToList();
+
+        sb.AppendLine("        /// <summary>");
+        sb.AppendLine("        /// Pre-resolved DI cache. All service lookups happen once at construction time.");
+        sb.AppendLine("        /// </summary>");
+        sb.AppendLine("        private readonly struct DICache");
         sb.AppendLine("        {");
-        sb.AppendLine("            // Get pre-processors");
-        sb.AppendLine("            var preProcessors = _serviceProvider.GetServices<IMessagePreProcessor<TMessage>>();");
-        sb.AppendLine("            foreach (var preProcessor in preProcessors)");
+
+        // Wrapper fields for each non-notification handler
+        foreach (var handler in nonStreamingHandlers)
+        {
+            var wrapperName = GetWrapperClassName(handler);
+            var fieldName = GetCacheFieldName(handler);
+            sb.AppendLine($"            public readonly {wrapperName} {fieldName};");
+        }
+
+        // Notification handler array fields
+        foreach (var handler in notificationTypes)
+        {
+            var fieldName = GetNotificationCacheFieldName(handler);
+            sb.AppendLine($"            public readonly INotificationHandler<{handler.MessageTypeFullName}>[] {fieldName};");
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("            public DICache(IServiceProvider sp)");
         sb.AppendLine("            {");
-        sb.AppendLine("                await preProcessor.Process(message, cancellationToken);");
+
+        foreach (var handler in nonStreamingHandlers)
+        {
+            var wrapperName = GetWrapperClassName(handler);
+            var fieldName = GetCacheFieldName(handler);
+            sb.AppendLine($"                {fieldName} = new {wrapperName}(sp);");
+        }
+
+        foreach (var handler in notificationTypes)
+        {
+            var fieldName = GetNotificationCacheFieldName(handler);
+            sb.AppendLine($"                {fieldName} = sp.GetServices<INotificationHandler<{handler.MessageTypeFullName}>>().ToArray();");
+        }
+
         sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            // Get pipeline behaviors");
-        sb.AppendLine("            var behaviors = _serviceProvider.GetServices<IPipelineBehavior<TMessage, TResponse>>().ToArray();");
-        sb.AppendLine();
-        sb.AppendLine("            // Build the pipeline");
-        sb.AppendLine("            MessageHandlerDelegate<TResponse> next = handler;");
-        sb.AppendLine();
-        sb.AppendLine("            for (int i = behaviors.Length - 1; i >= 0; i--)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var behavior = behaviors[i];");
-        sb.AppendLine("                var currentNext = next;");
-        sb.AppendLine("                next = () => behavior.Handle(message, currentNext, cancellationToken);");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            TResponse response;");
-        sb.AppendLine("            try");
-        sb.AppendLine("            {");
-        sb.AppendLine("                response = await next();");
-        sb.AppendLine("            }");
-        sb.AppendLine("            catch (Exception ex)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                // Try exception handlers");
-        sb.AppendLine("                var exceptionHandlers = _serviceProvider.GetServices<IMessageExceptionHandler<TMessage, TResponse, Exception>>();");
-        sb.AppendLine("                foreach (var exHandler in exceptionHandlers)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    var result = await exHandler.Handle(message, ex, cancellationToken);");
-        sb.AppendLine("                    if (result.Handled)");
-        sb.AppendLine("                    {");
-        sb.AppendLine("                        return result.Response!;");
-        sb.AppendLine("                    }");
-        sb.AppendLine("                }");
-        sb.AppendLine("                throw;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            // Get post-processors");
-        sb.AppendLine("            var postProcessors = _serviceProvider.GetServices<IMessagePostProcessor<TMessage, TResponse>>();");
-        sb.AppendLine("            foreach (var postProcessor in postProcessors)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                await postProcessor.Process(message, response, cancellationToken);");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            return response;");
         sb.AppendLine("        }");
         sb.AppendLine();
     }
 
-    private static void GenerateSendMethods(StringBuilder sb, ImmutableArray<HandlerInfo> handlers)
+    private static void GenerateTypedSendMethods(StringBuilder sb, ImmutableArray<HandlerInfo> handlers)
     {
-        var requestHandlers = handlers.Where(h => h.Kind == HandlerKind.Request && !h.IsStreaming).ToList();
-        var commandHandlers = handlers.Where(h => h.Kind == HandlerKind.Command && !h.IsStreaming).ToList();
-        var queryHandlers = handlers.Where(h => h.Kind == HandlerKind.Query && !h.IsStreaming).ToList();
+        var nonStreamingHandlers = handlers.Where(h => !h.IsAbstract && !h.IsStreaming && h.Kind != HandlerKind.Notification).ToList();
+
+        foreach (var handler in nonStreamingHandlers)
+        {
+            var responseType = handler.ResponseTypeFullName ?? "Unit";
+            var fieldName = GetCacheFieldName(handler);
+
+            sb.AppendLine($"        /// <summary>Monomorphized Send for <see cref=\"{handler.MessageTypeName}\"/>.</summary>");
+            sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"        public ValueTask<{responseType}> Send({handler.MessageTypeFullName} message, CancellationToken cancellationToken = default)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            return _cache.{fieldName}.Handle(message, cancellationToken);");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+    }
+
+    private static void GenerateGenericSendMethods(StringBuilder sb, ImmutableArray<HandlerInfo> handlers)
+    {
+        var requestHandlers = handlers.Where(h => h.Kind == HandlerKind.Request && !h.IsStreaming && !h.IsAbstract).ToList();
+        var commandHandlers = handlers.Where(h => h.Kind == HandlerKind.Command && !h.IsStreaming && !h.IsAbstract).ToList();
+        var queryHandlers = handlers.Where(h => h.Kind == HandlerKind.Query && !h.IsStreaming && !h.IsAbstract).ToList();
 
         // Generic Send for IRequest<TResponse>
-        sb.AppendLine("        /// <inheritdoc />");
-        sb.AppendLine("        public async ValueTask<TResponse> Send<TResponse>(IRequest<TResponse> request, CancellationToken cancellationToken = default)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            return request switch");
-        sb.AppendLine("            {");
-
-        foreach (var handler in requestHandlers)
-        {
-            var responseType = handler.ResponseTypeFullName ?? "Unit";
-            var handlerType = handler.ResponseTypeFullName != null
-                ? $"IRequestHandler<{handler.MessageTypeFullName}, {responseType}>"
-                : $"IRequestHandler<{handler.MessageTypeFullName}>";
-            sb.AppendLine($"                {handler.MessageTypeFullName} msg => (TResponse)(object)(await ExecuteWithPipeline<{handler.MessageTypeFullName}, {responseType}>(msg, () => _serviceProvider.GetRequiredService<{handlerType}>().Handle(msg, cancellationToken), cancellationToken)),");
-        }
-
-        sb.AppendLine("                _ => throw new InvalidOperationException($\"No handler registered for {request.GetType().Name}\")");
-        sb.AppendLine("            };");
-        sb.AppendLine("        }");
-        sb.AppendLine();
+        GenerateGenericSendMethod(sb, "IRequest", requestHandlers, "request");
 
         // Generic Send for ICommand<TResponse>
-        sb.AppendLine("        /// <inheritdoc />");
-        sb.AppendLine("        public async ValueTask<TResponse> Send<TResponse>(ICommand<TResponse> command, CancellationToken cancellationToken = default)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            return command switch");
-        sb.AppendLine("            {");
-
-        foreach (var handler in commandHandlers)
-        {
-            var responseType = handler.ResponseTypeFullName ?? "Unit";
-            var handlerType = handler.ResponseTypeFullName != null
-                ? $"ICommandHandler<{handler.MessageTypeFullName}, {responseType}>"
-                : $"ICommandHandler<{handler.MessageTypeFullName}>";
-            sb.AppendLine($"                {handler.MessageTypeFullName} msg => (TResponse)(object)(await ExecuteWithPipeline<{handler.MessageTypeFullName}, {responseType}>(msg, () => _serviceProvider.GetRequiredService<{handlerType}>().Handle(msg, cancellationToken), cancellationToken)),");
-        }
-
-        sb.AppendLine("                _ => throw new InvalidOperationException($\"No handler registered for {command.GetType().Name}\")");
-        sb.AppendLine("            };");
-        sb.AppendLine("        }");
-        sb.AppendLine();
+        GenerateGenericSendMethod(sb, "ICommand", commandHandlers, "command");
 
         // Generic Send for IQuery<TResponse>
-        sb.AppendLine("        /// <inheritdoc />");
-        sb.AppendLine("        public async ValueTask<TResponse> Send<TResponse>(IQuery<TResponse> query, CancellationToken cancellationToken = default)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            return query switch");
-        sb.AppendLine("            {");
+        GenerateGenericSendMethod(sb, "IQuery", queryHandlers, "query");
+    }
 
-        foreach (var handler in queryHandlers)
+    private static void GenerateGenericSendMethod(StringBuilder sb, string interfaceName, List<HandlerInfo> handlers, string paramName)
+    {
+        sb.AppendLine("        /// <inheritdoc />");
+        sb.AppendLine($"        public ValueTask<TResponse> Send<TResponse>({interfaceName}<TResponse> {paramName}, CancellationToken cancellationToken = default)");
+        sb.AppendLine("        {");
+
+        if (handlers.Count > 0)
         {
-            var responseType = handler.ResponseTypeFullName!;
-            sb.AppendLine($"                {handler.MessageTypeFullName} msg => (TResponse)(object)(await ExecuteWithPipeline<{handler.MessageTypeFullName}, {responseType}>(msg, () => _serviceProvider.GetRequiredService<IQueryHandler<{handler.MessageTypeFullName}, {responseType}>>().Handle(msg, cancellationToken), cancellationToken))!,");
+            sb.AppendLine($"            switch ({paramName})");
+            sb.AppendLine("            {");
+
+            foreach (var handler in handlers)
+            {
+                var responseType = handler.ResponseTypeFullName ?? "Unit";
+                var fieldName = GetCacheFieldName(handler);
+
+                sb.AppendLine($"                case {handler.MessageTypeFullName} msg:");
+                sb.AppendLine("                {");
+                sb.AppendLine($"                    var task = _cache.{fieldName}.Handle(msg, cancellationToken);");
+                sb.AppendLine($"                    return Unsafe.As<ValueTask<{responseType}>, ValueTask<TResponse>>(ref task);");
+                sb.AppendLine("                }");
+            }
+
+            sb.AppendLine("            }");
         }
 
-        sb.AppendLine("                _ => throw new InvalidOperationException($\"No handler registered for {query.GetType().Name}\")");
-        sb.AppendLine("            };");
+        sb.AppendLine($"            throw new InvalidOperationException($\"No handler registered for {{{paramName}.GetType().Name}}\");");
         sb.AppendLine("        }");
         sb.AppendLine();
     }
 
     private static void GeneratePublishMethod(StringBuilder sb, ImmutableArray<HandlerInfo> handlers)
     {
+        var notificationTypes = handlers.Where(h => !h.IsAbstract && h.Kind == HandlerKind.Notification)
+            .GroupBy(h => h.MessageTypeFullName)
+            .Select(g => g.First())
+            .ToList();
+
+        // Generate typed Publish methods for each notification type
+        foreach (var handler in notificationTypes)
+        {
+            var fieldName = GetNotificationCacheFieldName(handler);
+
+            sb.AppendLine($"        /// <summary>Typed Publish for <see cref=\"{handler.MessageTypeName}\"/>.</summary>");
+            sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"        public ValueTask Publish({handler.MessageTypeFullName} notification, CancellationToken cancellationToken = default)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            var handlers = _cache.{fieldName};");
+            sb.AppendLine("            if (_options.ThrowOnNoNotificationHandler && handlers.Length == 0)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                throw new InvalidOperationException($\"No notification handler registered for {handler.MessageTypeName}\");");
+            sb.AppendLine("            }");
+            sb.AppendLine("            return _options.NotificationPublisher.Publish(handlers, notification, cancellationToken);");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+
+        // Generic Publish<TNotification>
         sb.AppendLine("        /// <inheritdoc />");
-        sb.AppendLine("        public async ValueTask Publish<TNotification>(TNotification notification, CancellationToken cancellationToken = default)");
+        sb.AppendLine("        public ValueTask Publish<TNotification>(TNotification notification, CancellationToken cancellationToken = default)");
         sb.AppendLine("            where TNotification : INotification");
         sb.AppendLine("        {");
+
+        if (notificationTypes.Count > 0)
+        {
+            sb.AppendLine("            switch (notification)");
+            sb.AppendLine("            {");
+
+            foreach (var handler in notificationTypes)
+            {
+                sb.AppendLine($"                case {handler.MessageTypeFullName} n:");
+                sb.AppendLine($"                    return Publish(n, cancellationToken);");
+            }
+
+            sb.AppendLine("            }");
+        }
+
+        sb.AppendLine("            // Fallback: resolve from DI for notification types not known at compile time");
         sb.AppendLine("            var handlers = _serviceProvider.GetServices<INotificationHandler<TNotification>>();");
         sb.AppendLine("            if (_options.ThrowOnNoNotificationHandler && !handlers.Any())");
         sb.AppendLine("            {");
         sb.AppendLine("                throw new InvalidOperationException($\"No notification handler registered for {typeof(TNotification).Name}\");");
         sb.AppendLine("            }");
-        sb.AppendLine("            await _options.NotificationPublisher.Publish(handlers, notification, cancellationToken);");
+        sb.AppendLine("            return _options.NotificationPublisher.Publish(handlers, notification, cancellationToken);");
         sb.AppendLine("        }");
         sb.AppendLine();
     }
@@ -739,5 +893,25 @@ internal static class Emitter
             (HandlerKind.Query, true, _) => $"IStreamQueryHandler<{handler.MessageTypeFullName}, {handler.ResponseTypeFullName}>",
             _ => throw new InvalidOperationException($"Unknown handler kind: {handler.Kind}")
         };
+    }
+
+    private static string SanitizeTypeName(string fullTypeName)
+    {
+        return fullTypeName.Replace('.', '_').Replace('<', '_').Replace('>', '_').Replace(',', '_').Replace(' ', '_');
+    }
+
+    private static string GetWrapperClassName(HandlerInfo handler)
+    {
+        return $"Wrapper_{SanitizeTypeName(handler.MessageTypeFullName)}";
+    }
+
+    private static string GetCacheFieldName(HandlerInfo handler)
+    {
+        return $"Wrapper_{SanitizeTypeName(handler.MessageTypeFullName)}";
+    }
+
+    private static string GetNotificationCacheFieldName(HandlerInfo handler)
+    {
+        return $"Handlers_{SanitizeTypeName(handler.MessageTypeFullName)}";
     }
 }
