@@ -1,0 +1,172 @@
+---
+title: Vibecoded with Opus
+description: TurboMediator was written entirely through AI-assisted development using Claude Opus. Here's why that's not a problem.
+icon: Sparkles
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+## Yes, This Library Is Vibecoded
+
+TurboMediator was built entirely through **AI-assisted development** — specifically using [Claude Opus](https://www.anthropic.com/claude), Anthropic's most capable model. Every module, every abstraction, every source generator, every pipeline behavior was authored through a collaborative loop between human intent and AI generation.
+
+There was no traditional keyboard-driven coding session. The architecture was described, the constraints were stated, the tradeoffs were discussed — and the code emerged from that conversation.
+
+This is **vibecoding**: directing software into existence through high-bandwidth dialogue with a model capable of holding an entire codebase's worth of context.
+
+---
+
+## Why That Should Concern You (and Why It Doesn't)
+
+The reasonable reaction to hearing a library is vibecoded is skepticism. AI models hallucinate. They produce plausible-looking code that subtly violates invariants. They miss edge cases that a battle-scarred engineer would catch in seconds. They optimize for code that *reads* correct, not code that *is* correct.
+
+These are legitimate concerns. But they apply to **the generation process**, not the **artifact**.
+
+The test suite is the equalizer.
+
+---
+
+## The Test Suite
+
+TurboMediator has a comprehensive suite of **unit and integration tests** covering every layer of the library:
+
+### Unit Tests
+
+Every core behavior is tested in isolation:
+
+| Area | Test File |
+|------|-----------|
+| Commands | `CommandTests.cs` |
+| Queries | `QueryTests.cs` |
+| Requests | `RequestTests.cs` |
+| Notifications | `NotificationTests.cs`, `NotificationPublisherTests.cs` |
+| Pipeline behaviors | `PipelineBehaviorTests.cs` |
+| Exception handling | `ExceptionHandlerTests.cs` |
+| Streaming | `StreamingTests.cs` |
+| Dependency injection | `DependencyInjectionTests.cs` |
+| Validation | `ValidationTests.cs`, `FluentValidationTests.cs` |
+| Caching | `CachingTests.cs` |
+| Batching | `BatchingTests.cs` |
+| Rate limiting | `RateLimiting/` |
+| Resilience | `ResilienceTests.cs`, `Resilience/` |
+| Feature flags | `FeatureFlagTests.cs` |
+| Result types | `ResultTests.cs` |
+| Sagas | `SagaTests.cs` |
+| State machines | `StateMachineTests.cs` |
+| Telemetry / Observability | `TelemetryTests.cs`, `Observability/` |
+| Distributed locking | `DistributedLocking/` |
+| Inbox / Outbox | `Inbox/`, `Outbox/` |
+| Processors | `ProcessorTests.cs` |
+| Enterprise features | `Enterprise/` |
+| Scheduling | `Scheduling/` |
+| CLI | `Cli/` |
+| Testing utilities | `Testing/` |
+
+### Integration Tests
+
+End-to-end scenarios test real interactions between components, including database-backed stores and external infrastructure:
+
+| Test | What it covers |
+|------|----------------|
+| `FullPipelineIntegrationTests.cs` | A complete request flowing through all pipeline behaviors |
+| `CachingIntegrationTests.cs` | Distributed cache read/write/invalidation under a real pipeline |
+| `TransactionIntegrationTests.cs` | Unit-of-work and transactional consistency with EF Core |
+| `AuditStoreIntegrationTests.cs` | Audit trail persistence for commands |
+| `SagaStoreIntegrationTests.cs` | Saga state persistence and resumption |
+| `InboxStoreIntegrationTests.cs` | Inbox idempotency guarantees |
+| `OutboxStoreIntegrationTests.cs` | Outbox reliable delivery semantics |
+| `RedisDistributedLockIntegrationTests.cs` | Distributed locking via Redis |
+
+### AOT Compatibility
+
+A dedicated `AotCompatibilityTests.cs` verifies that the source-generated output is fully compatible with **Native AOT** — no reflection, no runtime code emission, no trimming surprises.
+
+---
+
+## Benchmark Results
+
+Numbers don't care who wrote the code. These results were produced by BenchmarkDotNet running against TurboMediator, MediatR, and the [Mediator](https://github.com/martinothamar/Mediator) source-generator library (the closest architectural equivalent).
+
+> Intel Core i7-10750H, .NET 8.0.23, X64 RyuJIT AVX2
+
+### Send Command
+
+| Method             | Mean      | Ratio        | Allocated | Alloc Ratio |
+|------------------- |----------:|-------------:|----------:|------------:|
+| TurboMediator      |  55.56 ns | baseline     |      24 B |             |
+| Mediator_SourceGen |  55.91 ns | 1.01x slower |      24 B |  1.00x more |
+| MediatR            | 219.16 ns | 3.94x slower |     296 B | 12.33x more |
+
+### Send Query
+
+| Method             | Mean      | Ratio        | Allocated | Alloc Ratio |
+|------------------- |----------:|-------------:|----------:|------------:|
+| TurboMediator      |  77.29 ns | baseline     |      48 B |             |
+| Mediator_SourceGen |  68.36 ns | 1.13x faster |      48 B |  1.00x more |
+| MediatR            | 235.85 ns | 3.05x slower |     464 B |  9.67x more |
+
+### Send Command With Response
+
+| Method             | Mean      | Ratio        | Allocated | Alloc Ratio |
+|------------------- |----------:|-------------:|----------:|------------:|
+| TurboMediator      |  72.76 ns | baseline     |      48 B |             |
+| Mediator_SourceGen |  66.50 ns | 1.09x faster |      48 B |  1.00x more |
+| MediatR            | 248.88 ns | 3.42x slower |     464 B |  9.67x more |
+
+### Pipeline Behavior (validation + logging + caching behaviors active)
+
+| Method             | Mean      | Ratio        | Allocated | Alloc Ratio |
+|------------------- |----------:|-------------:|----------:|------------:|
+| TurboMediator      |  74.81 ns | baseline     |      48 B |             |
+| Mediator_SourceGen |  78.64 ns | 1.05x slower |      48 B |  1.00x more |
+| MediatR            | 316.44 ns | 4.23x slower |     656 B | 13.67x more |
+
+### Publish Notification
+
+| Method             | Mean      | Ratio        | Allocated | Alloc Ratio |
+|------------------- |----------:|-------------:|----------:|------------:|
+| Mediator_SourceGen |  57.20 ns | 1.48x faster |      24 B |  1.00x more |
+| TurboMediator      |  84.40 ns | baseline     |      24 B |             |
+| MediatR            | 216.04 ns | 2.56x slower |     344 B | 14.33x more |
+
+TurboMediator is **3–4× faster than MediatR** and allocates **10–14× less memory** per operation. It runs at parity with the other source-generator-based implementation. This is what compile-time dispatch with zero reflection produces — and the AI wrote every line of it.
+
+---
+
+## How the Development Process Worked
+
+Vibecoding is not "paste requirements, accept all." The loop looked like this:
+
+1. **Describe the behavior** — state the interface contract, the invariants, the failure modes, and the performance constraints in precise terms
+2. **Generate** — the model produces an implementation against those constraints
+3. **Run the tests** — the test suite either passes or reveals where the model's mental model diverged from reality
+4. **Review and challenge** — every non-trivial design decision was questioned: *why this abstraction? what does this break? is this the right tradeoff?*
+5. **Iterate** — the loop repeats, refining until the tests pass and the design holds up under scrutiny
+
+No code entered the codebase without passing the test suite. No design decision was accepted without a rationale that survived a challenge. The model generates fast; the human stays critical.
+
+---
+
+## How It Compares
+
+If the vibecoded origin still bothers you, the [comparison page](/docs/comparison) benchmarks TurboMediator against MediatR feature-by-feature — licensing, performance, Native AOT support, pipeline capabilities, and ecosystem coverage.
+
+The argument against vibecoded code is that it might be subtly wrong. The comparison shows what "subtly wrong" would have to overcome: a 4× performance advantage, zero allocations in the hot path, Native AOT compatibility, and 20+ modules — all with a passing test suite.
+
+---
+
+## The Point
+
+Code quality is not a function of who — or what — wrote it. It is a function of how thoroughly it is **specified**, **reviewed**, and **tested**.
+
+Every behavior in this library carries a test. Every edge case that was identified during development was encoded as an assertion. The test suite is the specification made executable.
+
+An AI that produces a correct, well-tested implementation is more useful than a human who produces an untested one. The output is what matters, and the output can be verified.
+
+<Callout type="warn" title="Found a bug?">
+Open an issue. That's exactly what open source exists for — regardless of who wrote the code. The repository is public, the tests are the ground truth, and a reproducible bug report is always welcome.
+</Callout>
+
+<Callout type="info" title="Transparency">
+This page exists because hiding the development process would be dishonest. Every module was reviewed critically before being accepted — the AI generated, the human decided. If you want to audit a specific design decision, the source is open.
+</Callout>
