@@ -32,7 +32,7 @@ public class TransactionBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         // Check for attribute on message type
@@ -41,7 +41,7 @@ public class TransactionBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
         // If no attribute and not explicitly configured, just pass through
         if (attribute == null && _options == null)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         // Merge attribute settings with options
@@ -68,7 +68,7 @@ public class TransactionBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
             }
 
             // Reuse existing transaction
-            return await ExecuteWithinTransaction(next, autoSaveChanges, effectiveToken);
+            return await ExecuteWithinTransaction(message, next, autoSaveChanges, effectiveToken);
         }
 
         // Execute with or without execution strategy
@@ -77,17 +77,18 @@ public class TransactionBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
             var result = await _transactionManager.ExecuteWithStrategyAsync(
                 async ct =>
                 {
-                    return await ExecuteInNewTransaction(next, isolationLevel, autoSaveChanges, ct);
+                    return await ExecuteInNewTransaction(message, next, isolationLevel, autoSaveChanges, ct);
                 },
                 effectiveToken);
             return result;
         }
 
-        return await ExecuteInNewTransaction(next, isolationLevel, autoSaveChanges, effectiveToken);
+        return await ExecuteInNewTransaction(message, next, isolationLevel, autoSaveChanges, effectiveToken);
     }
 
     private async ValueTask<TResponse> ExecuteInNewTransaction(
-        MessageHandlerDelegate<TResponse> next,
+        TMessage message,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         System.Data.IsolationLevel isolationLevel,
         bool autoSaveChanges,
         CancellationToken cancellationToken)
@@ -96,7 +97,7 @@ public class TransactionBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
 
         try
         {
-            var response = await ExecuteWithinTransaction(next, autoSaveChanges, cancellationToken);
+            var response = await ExecuteWithinTransaction(message, next, autoSaveChanges, cancellationToken);
             await transaction.CommitAsync(cancellationToken);
             return response;
         }
@@ -112,11 +113,12 @@ public class TransactionBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
     }
 
     private async ValueTask<TResponse> ExecuteWithinTransaction(
-        MessageHandlerDelegate<TResponse> next,
+        TMessage message,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         bool autoSaveChanges,
         CancellationToken cancellationToken)
     {
-        var response = await next();
+        var response = await next(message, cancellationToken);
 
         if (autoSaveChanges)
         {

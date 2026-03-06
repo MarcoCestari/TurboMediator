@@ -119,7 +119,7 @@ public class EnrichContextBehavior<TMessage, TResponse>
 
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken ct)
     {
         var context = _contextAccessor.Context!;
@@ -134,7 +134,7 @@ public class EnrichContextBehavior<TMessage, TResponse>
         // Set keyed data
         context.Items["StartTime"] = DateTime.UtcNow;
 
-        return await next();
+        return await next(message, ct);
     }
 }
 ```

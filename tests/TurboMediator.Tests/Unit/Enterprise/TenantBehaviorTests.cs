@@ -31,7 +31,7 @@ public class TenantBehaviorTests
         var message = new NoTenantRequiredCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<NoTenantRequiredCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -53,7 +53,7 @@ public class TenantBehaviorTests
         var behavior = new TenantBehavior<TenantRequiredCommand, string>(tenantContext);
         var message = new TenantRequiredCommand();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("Success");
+        MessageHandlerDelegate<TenantRequiredCommand, string> next = (msg, ct) => new ValueTask<string>("Success");
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<TenantRequiredException>(
@@ -71,7 +71,7 @@ public class TenantBehaviorTests
         var message = new TenantRequiredCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<TenantRequiredCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -94,7 +94,7 @@ public class TenantBehaviorTests
         var message = new TenantAwareCommand("tenant-123");
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<TenantAwareCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -117,7 +117,7 @@ public class TenantBehaviorTests
         var behavior = new TenantBehavior<TenantAwareCommand, string>(tenantContext, options);
         var message = new TenantAwareCommand("tenant-456");
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("Success");
+        MessageHandlerDelegate<TenantAwareCommand, string> next = (msg, ct) => new ValueTask<string>("Success");
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<TenantMismatchException>(
@@ -138,7 +138,7 @@ public class TenantBehaviorTests
         var message = new TenantAwareCommand("tenant-456");
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<TenantAwareCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -161,7 +161,7 @@ public class TenantBehaviorTests
         var message = new TenantAwareCommand(null);
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<TenantAwareCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");

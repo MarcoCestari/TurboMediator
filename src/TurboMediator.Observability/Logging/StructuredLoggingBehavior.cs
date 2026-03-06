@@ -44,7 +44,7 @@ public class StructuredLoggingBehavior<TMessage, TResponse> : IPipelineBehavior<
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var messageType = typeof(TMessage);
@@ -52,7 +52,7 @@ public class StructuredLoggingBehavior<TMessage, TResponse> : IPipelineBehavior<
         // Check if we should log this message type
         if (_options.ShouldLog != null && !_options.ShouldLog(messageType))
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         var messageTypeName = messageType.Name;
@@ -74,7 +74,7 @@ public class StructuredLoggingBehavior<TMessage, TResponse> : IPipelineBehavior<
 
         try
         {
-            var response = await next();
+            var response = await next(message, cancellationToken);
             stopwatch.Stop();
 
             LogCompletion(messageTypeName, handlerName, correlationId, stopwatch.Elapsed, message, response);

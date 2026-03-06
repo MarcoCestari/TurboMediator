@@ -57,8 +57,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
         // Act
         var result = await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 _dbContext.Products.Add(product);
                 return product;
             },
@@ -88,8 +87,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
         // Act
         var act = async () => await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 _dbContext.Products.Add(new TestProduct { Name = "Defective", Price = 100m });
                 throw new InvalidOperationException("Simulated failure");
             },
@@ -122,8 +120,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
         // Act
         var result = await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 _dbContext.Products.Add(product);
                 return product;
             },
@@ -154,8 +151,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
         // Act
         var result = await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 _dbContext.Products.Add(product);
                 return product;
             },
@@ -182,8 +178,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
         // Act - handler adds entity but auto save is off, and handler doesn't call SaveChanges
         var result = await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 _dbContext.Products.Add(product);
                 return product;
             },
@@ -208,8 +203,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
         // Act - multiple operations in a single transaction that fails after first insert
         var act = async () => await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 _dbContext.Products.Add(new TestProduct { Name = "AtomicFirst", Price = 10m });
                 _dbContext.Products.Add(new TestProduct { Name = "AtomicSecond", Price = 20m });
                 await _dbContext.SaveChangesAsync();

@@ -11,13 +11,13 @@ public class LoggingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
     where TMessage : IMessage
 {
     public async ValueTask<TResponse> Handle(
-        TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken ct)
+        TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken ct)
     {
         var name = typeof(TMessage).Name;
         Console.WriteLine($"   📥 [Pipeline] Starting {name}...");
 
         var sw = Stopwatch.StartNew();
-        var response = await next();
+        var response = await next(message, ct);
         sw.Stop();
 
         Console.WriteLine($"   📤 [Pipeline] {name} completed in {sw.ElapsedMilliseconds}ms");

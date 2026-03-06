@@ -51,7 +51,7 @@ public class DistributedLockingBehaviorTests
 
         var result = await behavior.Handle(
             new UnlockedQuery(1),
-            () => new ValueTask<string>("ok"),
+            (msg, ct) => new ValueTask<string>("ok"),
             CancellationToken.None);
 
         result.Should().Be("ok");
@@ -74,8 +74,7 @@ public class DistributedLockingBehaviorTests
         var called = false;
 
         var result = await behavior.Handle(
-            new GlobalLockCommand(),
-            () => { called = true; return new ValueTask<string>("done"); },
+            new GlobalLockCommand(), (msg, ct) => { called = true; return new ValueTask<string>("done"); },
             CancellationToken.None);
 
         result.Should().Be("done");
@@ -99,7 +98,7 @@ public class DistributedLockingBehaviorTests
 
         var result = await behavior.Handle(
             new TransferCommand(accountId),
-            () => new ValueTask<string>("transferred"),
+            (msg, ct) => new ValueTask<string>("transferred"),
             CancellationToken.None);
 
         result.Should().Be("transferred");
@@ -124,7 +123,7 @@ public class DistributedLockingBehaviorTests
 
         await behavior.Handle(
             new TransferCommand(accountId),
-            () => new ValueTask<string>("ok"),
+            (msg, ct) => new ValueTask<string>("ok"),
             CancellationToken.None);
 
         providerMock.Verify(p => p.TryAcquireAsync(
@@ -145,7 +144,7 @@ public class DistributedLockingBehaviorTests
 
         var act = async () => await behavior.Handle(
             new GlobalLockCommand(),
-            () => new ValueTask<string>("never"),
+            (msg, ct) => new ValueTask<string>("never"),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<DistributedLockException>()
@@ -164,8 +163,7 @@ public class DistributedLockingBehaviorTests
         var handlerCalled = false;
 
         var result = await behavior.Handle(
-            new SilentLockCommand(),
-            () => { handlerCalled = true; return new ValueTask<string?>("executed"); },
+            new SilentLockCommand(), (msg, ct) => { handlerCalled = true; return new ValueTask<string?>("executed"); },
             CancellationToken.None);
 
         result.Should().BeNull("default(string?) is null");
@@ -187,7 +185,7 @@ public class DistributedLockingBehaviorTests
 
         var act = async () => await behavior.Handle(
             new GlobalLockCommand(),
-            () => throw new InvalidOperationException("handler error"),
+            (msg, ct) => throw new InvalidOperationException("handler error"),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
@@ -232,7 +230,7 @@ public class DistributedLockingBehaviorTests
 
         await behavior.Handle(
             new GlobalLockCommand(),
-            () => new ValueTask<string>("ok"),
+            (msg, ct) => new ValueTask<string>("ok"),
             CancellationToken.None);
 
         providerMock.Verify(p => p.TryAcquireAsync(
@@ -261,7 +259,7 @@ public class DistributedLockingBehaviorTests
 
         await behavior.Handle(
             new GlobalLockCommand(),
-            () => new ValueTask<string>("ok"),
+            (msg, ct) => new ValueTask<string>("ok"),
             CancellationToken.None);
 
         providerMock.Verify(p => p.TryAcquireAsync(

@@ -39,8 +39,7 @@ public class EntityFrameworkBehaviorTests
         // Act
         var result = await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 dbContext.Entities.Add(expectedEntity);
                 return expectedEntity;
             },
@@ -74,8 +73,7 @@ public class EntityFrameworkBehaviorTests
         // Act & Assert
         var act = async () => await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 dbContext.Entities.Add(new TestEntity { Id = 1, Name = "Test Entity" });
                 throw new InvalidOperationException("Test exception");
             },
@@ -126,7 +124,7 @@ public class EntityFrameworkBehaviorTests
         // Act
         var result = await behavior.Handle(
             command,
-            async () => "Success",
+            async (msg, ct) => "Success",
             CancellationToken.None);
 
         // Assert
@@ -153,7 +151,7 @@ public class EntityFrameworkBehaviorTests
         // Act & Assert
         var act = async () => await behavior.Handle(
             command,
-            () => throw new InvalidOperationException("Test error"),
+            (msg, ct) => throw new InvalidOperationException("Test error"),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>();
@@ -193,7 +191,7 @@ public class EntityFrameworkBehaviorTests
         // Act
         await behavior.Handle(
             command,
-            async () => "OK",
+            async (msg, ct) => "OK",
             CancellationToken.None);
 
         // Assert

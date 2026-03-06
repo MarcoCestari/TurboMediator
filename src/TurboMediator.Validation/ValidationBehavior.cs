@@ -40,14 +40,14 @@ public class ValidationBehavior<TMessage, TResponse> : IPipelineBehavior<TMessag
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var validatorList = _validators.ToList();
 
         if (validatorList.Count == 0)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         var errors = new List<ValidationError>();
@@ -72,6 +72,6 @@ public class ValidationBehavior<TMessage, TResponse> : IPipelineBehavior<TMessag
             throw new ValidationException(errors, typeof(TMessage));
         }
 
-        return await next();
+        return await next(message, cancellationToken);
     }
 }

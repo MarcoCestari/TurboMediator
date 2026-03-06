@@ -95,8 +95,7 @@ public class RedisDistributedLockIntegrationTests : IAsyncLifetime
         first.Should().NotBeNull();
 
         // Release the lock after 200ms
-        _ = Task.Run(async () =>
-        {
+        _ = Task.Run(async () => {
             await Task.Delay(200);
             await first!.DisposeAsync();
         });
@@ -231,8 +230,7 @@ public class RedisDistributedLockIntegrationTests : IAsyncLifetime
             var behav = new DistributedLockingBehavior<PipelineLockCommand, int>(_provider);
             return await behav.Handle(
                 new PipelineLockCommand(sharedId),
-                async () =>
-                {
+                async (msg, ct) => {
                     // Simulate work — if two handlers run in parallel, counter could be wrong
                     var current = counter;
                     await Task.Delay(40);
@@ -266,7 +264,7 @@ public class RedisDistributedLockIntegrationTests : IAsyncLifetime
 
         var act = async () => await behavior.Handle(
             new PipelineLockCommand(key),
-            () => new ValueTask<int>(99),
+            (msg, ct) => new ValueTask<int>(99),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<DistributedLockException>();

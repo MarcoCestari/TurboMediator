@@ -170,7 +170,7 @@ public class FeatureFlagTests
         var expectedResult = new DashboardResult { Title = "My Dashboard" };
         var callCount = 0;
 
-        var result = await behavior.Handle(query, () =>
+        var result = await behavior.Handle(query, (msg, ct) =>
         {
             callCount++;
             return new ValueTask<DashboardResult>(expectedResult);
@@ -189,7 +189,7 @@ public class FeatureFlagTests
         var behavior = new FeatureFlagBehavior<GetDashboardQuery, DashboardResult>(provider);
         var query = new GetDashboardQuery();
 
-        var act = () => behavior.Handle(query, () =>
+        var act = () => behavior.Handle(query, (msg, ct) =>
         {
             return new ValueTask<DashboardResult>(new DashboardResult());
         }, CancellationToken.None).AsTask();
@@ -208,7 +208,7 @@ public class FeatureFlagTests
         var query = new GetOptionalFeatureQuery();
         var handlerCalled = false;
 
-        var result = await behavior.Handle(query, () =>
+        var result = await behavior.Handle(query, (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<int>(42);
@@ -227,7 +227,7 @@ public class FeatureFlagTests
         var behavior = new FeatureFlagBehavior<GetSkippableFeatureQuery, string>(provider);
         var query = new GetSkippableFeatureQuery();
 
-        var result = await behavior.Handle(query, () =>
+        var result = await behavior.Handle(query, (msg, ct) =>
         {
             return new ValueTask<string>("should not be returned");
         }, CancellationToken.None);
@@ -250,7 +250,7 @@ public class FeatureFlagTests
         var behavior = new FeatureFlagBehavior<GetDashboardQuery, DashboardResult>(provider, options);
         var query = new GetDashboardQuery();
 
-        await behavior.Handle(query, () =>
+        await behavior.Handle(query, (msg, ct) =>
         {
             return new ValueTask<DashboardResult>(new DashboardResult());
         }, CancellationToken.None);
@@ -269,7 +269,7 @@ public class FeatureFlagTests
         var query = new GetRegularDataQuery();
         var callCount = 0;
 
-        var result = await behavior.Handle(query, () =>
+        var result = await behavior.Handle(query, (msg, ct) =>
         {
             callCount++;
             return new ValueTask<string>("data");
@@ -294,7 +294,7 @@ public class FeatureFlagTests
         var behavior = new FeatureFlagBehavior<GetBetaFeatureQuery, string>(provider, options);
         var query = new GetBetaFeatureQuery();
 
-        var result = await behavior.Handle(query, () =>
+        var result = await behavior.Handle(query, (msg, ct) =>
         {
             return new ValueTask<string>("beta data");
         }, CancellationToken.None);

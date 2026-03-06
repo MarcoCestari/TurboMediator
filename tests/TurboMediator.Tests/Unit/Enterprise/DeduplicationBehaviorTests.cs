@@ -25,7 +25,7 @@ public class DeduplicationBehaviorTests
         var message = new NonIdempotentCommand();
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<NonIdempotentCommand, string> next = (msg, ct) =>
         {
             handlerCallCount++;
             return new ValueTask<string>("Success");
@@ -50,7 +50,7 @@ public class DeduplicationBehaviorTests
         var message = new IdempotentCommand("key-123");
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<IdempotentCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -73,7 +73,7 @@ public class DeduplicationBehaviorTests
         var message = new IdempotentCommand("key-123");
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<IdempotentCommand, string> next = (msg, ct) =>
         {
             handlerCallCount++;
             return new ValueTask<string>($"Response-{handlerCallCount}");
@@ -99,7 +99,7 @@ public class DeduplicationBehaviorTests
         var message2 = new IdempotentCommand("key-2");
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<IdempotentCommand, string> next = (msg, ct) =>
         {
             handlerCallCount++;
             return new ValueTask<string>($"Response-{handlerCallCount}");
@@ -125,7 +125,7 @@ public class DeduplicationBehaviorTests
         var message = new IdempotentCommand("key-123");
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<IdempotentCommand, string> next = (msg, ct) =>
         {
             handlerCallCount++;
             if (handlerCallCount == 1)
@@ -155,7 +155,7 @@ public class DeduplicationBehaviorTests
         var message = new IdempotentCommand("key-123");
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<IdempotentCommand, string> next = (msg, ct) =>
         {
             handlerCallCount++;
             if (handlerCallCount == 1)

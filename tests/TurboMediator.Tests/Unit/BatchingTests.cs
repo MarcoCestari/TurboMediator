@@ -42,7 +42,7 @@ public class BatchingTests
 
         var result = await behavior.Handle(
             new GetProductQuery(1),
-            () => new ValueTask<string>("fallback-result"),
+            (msg, ct) => new ValueTask<string>("fallback-result"),
             CancellationToken.None);
 
         result.Should().Be("fallback-result");
@@ -59,7 +59,7 @@ public class BatchingTests
 
         var act = async () => await behavior.Handle(
             new GetProductQuery(1),
-            () => new ValueTask<string>("should not reach"),
+            (msg, ct) => new ValueTask<string>("should not reach"),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -79,7 +79,7 @@ public class BatchingTests
 
         var result = await behavior.Handle(
             new GetProductQuery(42),
-            () => new ValueTask<string>("fallback"),
+            (msg, ct) => new ValueTask<string>("fallback"),
             CancellationToken.None);
 
         result.Should().Be("Product-42");

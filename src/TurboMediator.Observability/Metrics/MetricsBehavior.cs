@@ -73,7 +73,7 @@ public class MetricsBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var tags = BuildTags();
@@ -85,7 +85,7 @@ public class MetricsBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
             _inFlightGauge?.Add(1, tags);
             _throughputCounter?.Add(1, tags);
 
-            var response = await next();
+            var response = await next(message, cancellationToken);
             succeeded = true;
             return response;
         }

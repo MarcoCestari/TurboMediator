@@ -14,12 +14,16 @@ public sealed class TaskWhenAllPublisher : INotificationPublisher
 
     /// <inheritdoc />
     public async ValueTask Publish<TNotification>(
-        IEnumerable<INotificationHandler<TNotification>> handlers,
+        INotificationHandler<TNotification>[] handlers,
         TNotification notification,
         CancellationToken cancellationToken)
         where TNotification : INotification
     {
-        var tasks = handlers.Select(handler => handler.Handle(notification, cancellationToken).AsTask());
+        var tasks = new Task[handlers.Length];
+        for (int i = 0; i < handlers.Length; i++)
+        {
+            tasks[i] = handlers[i].Handle(notification, cancellationToken).AsTask();
+        }
         await Task.WhenAll(tasks);
     }
 }

@@ -44,14 +44,14 @@ public class AuditBehavior<[DynamicallyAccessedMembers(DynamicallyAccessedMember
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var attribute = typeof(TMessage).GetCustomAttribute<AuditableAttribute>();
 
         if (attribute == null)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         var stopwatch = Stopwatch.StartNew();
@@ -62,7 +62,7 @@ public class AuditBehavior<[DynamicallyAccessedMembers(DynamicallyAccessedMember
 
         try
         {
-            response = await next();
+            response = await next(message, cancellationToken);
             auditEntry.Success = true;
 
             if (attribute.IncludeResponse || _options.IncludeResponse)

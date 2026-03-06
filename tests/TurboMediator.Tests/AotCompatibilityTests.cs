@@ -35,8 +35,8 @@ public class AotPingHandler : IRequestHandler<AotPing, AotPong>
 public class AotLoggingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
-    public ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
-        => next();
+    public ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken cancellationToken)
+        => next(message, cancellationToken);
 }
 
 public class AotPreProcessor<TMessage> : IMessagePreProcessor<TMessage>

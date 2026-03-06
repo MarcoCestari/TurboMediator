@@ -197,7 +197,7 @@ public class CorrelationContextTests
         // Act
         var result = await behavior.Handle(
             command,
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         // Assert
@@ -220,7 +220,7 @@ public class CorrelationContextTests
         // Act
         await behavior.Handle(
             command,
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         // Assert
@@ -239,8 +239,7 @@ public class CorrelationContextTests
         // Act
         await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 handlerCalled = true;
                 return "success";
             },
@@ -299,7 +298,7 @@ public class CorrelationContextTests
 
         using var activity = new Activity("test").Start();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("ok");
+        MessageHandlerDelegate<TestCommand, string> next = (msg, ct) => new ValueTask<string>("ok");
 
         await behavior.Handle(message, next, CancellationToken.None);
 
@@ -320,7 +319,7 @@ public class CorrelationContextTests
 
         using var activity = new Activity("test").Start();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("ok");
+        MessageHandlerDelegate<TestCommand, string> next = (msg, ct) => new ValueTask<string>("ok");
 
         await behavior.Handle(new TestCommand("test"), next, CancellationToken.None);
 

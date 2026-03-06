@@ -71,8 +71,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
         // Act
         var result = await txBehavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 var product = new TestProduct { Name = "Keyboard", Price = 150m, Stock = 50 };
                 _dbContext.Products.Add(product);
 
@@ -117,8 +116,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
         // Act
         var act = async () => await txBehavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 _dbContext.Products.Add(new TestProduct { Name = "FailedProduct", Price = 100m });
                 _dbContext.AuditEntries.Add(new AuditEntry
                 {
@@ -159,8 +157,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
         // Act
         var result = await txBehavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 var product = new TestProduct { Name = "Monitor", Price = 800m, Stock = 20 };
                 _dbContext.Products.Add(product);
 
@@ -202,8 +199,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
         // Act
         var act = async () => await txBehavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 _dbContext.Products.Add(new TestProduct { Name = "FailedMonitor", Price = 800m });
                 _dbContext.OutboxMessages.Add(new OutboxMessage
                 {
@@ -310,8 +306,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
         // Act
         var result = await txBehavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 // Create product
                 var product = new TestProduct { Name = "GPU", Price = 1500m, Stock = 5 };
                 _dbContext.Products.Add(product);

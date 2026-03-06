@@ -40,7 +40,7 @@ public class CachingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var cacheAttr = typeof(TMessage).GetCustomAttributes(typeof(CacheableAttribute), false)
@@ -50,7 +50,7 @@ public class CachingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
         // If not cacheable, just execute the handler
         if (cacheAttr == null)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         var cacheKey = GenerateCacheKey(message, cacheAttr);
@@ -63,7 +63,7 @@ public class CachingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
         }
 
         // Execute handler
-        var response = await next();
+        var response = await next(message, cancellationToken);
 
         // Determine duration: attribute value wins; fall back to options default
         var duration = cacheAttr.DurationSeconds > 0

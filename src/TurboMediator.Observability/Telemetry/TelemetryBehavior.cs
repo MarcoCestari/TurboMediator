@@ -32,7 +32,7 @@ public class TelemetryBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var messageType = typeof(TMessage).Name;
@@ -72,7 +72,7 @@ public class TelemetryBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage
 
         try
         {
-            var response = await next();
+            var response = await next(message, cancellationToken);
             success = true;
 
 #if NET6_0_OR_GREATER

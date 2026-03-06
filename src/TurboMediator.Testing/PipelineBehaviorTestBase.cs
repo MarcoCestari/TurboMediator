@@ -41,7 +41,7 @@ public abstract class PipelineBehaviorTestBase<TBehavior, TMessage, TResponse>
     {
         return Behavior.Handle(
             message,
-            () => new ValueTask<TResponse>(expectedResponse),
+            (msg, ct) => new ValueTask<TResponse>(expectedResponse),
             cancellationToken);
     }
 
@@ -54,7 +54,7 @@ public abstract class PipelineBehaviorTestBase<TBehavior, TMessage, TResponse>
     /// <returns>The response from the behavior.</returns>
     protected ValueTask<TResponse> InvokePipeline(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken = default)
     {
         return Behavior.Handle(message, next, cancellationToken);
@@ -74,7 +74,7 @@ public abstract class PipelineBehaviorTestBase<TBehavior, TMessage, TResponse>
     {
         return Behavior.Handle(
             message,
-            () => throw exception,
+            (msg, ct) => throw exception,
             cancellationToken);
     }
 
@@ -83,10 +83,10 @@ public abstract class PipelineBehaviorTestBase<TBehavior, TMessage, TResponse>
     /// </summary>
     /// <param name="response">The response to return.</param>
     /// <returns>A tuple containing the delegate and a function to check if it was called.</returns>
-    protected (MessageHandlerDelegate<TResponse> Delegate, Func<bool> WasCalled, Func<int> CallCount) CreateTrackingDelegate(TResponse response)
+    protected (MessageHandlerDelegate<TMessage, TResponse> Delegate, Func<bool> WasCalled, Func<int> CallCount) CreateTrackingDelegate(TResponse response)
     {
         var callCount = 0;
-        MessageHandlerDelegate<TResponse> del = () =>
+        MessageHandlerDelegate<TMessage, TResponse> del = (msg, ct) =>
         {
             Interlocked.Increment(ref callCount);
             return new ValueTask<TResponse>(response);

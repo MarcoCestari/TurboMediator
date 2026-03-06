@@ -102,12 +102,12 @@ public class TestLoggingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
         CallOrder.Clear();
     }
 
-    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken cancellationToken)
     {
         BeforeCalled = true;
         CallOrder.Add("Before");
 
-        var response = await next();
+        var response = await next(message, cancellationToken);
 
         AfterCalled = true;
         CallOrder.Add("After");
@@ -119,10 +119,10 @@ public class TestLoggingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
 public class FirstBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
-    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken cancellationToken)
     {
         OrderTracker.Add("First-Before");
-        var response = await next();
+        var response = await next(message, cancellationToken);
         OrderTracker.Add("First-After");
         return response;
     }
@@ -131,10 +131,10 @@ public class FirstBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TR
 public class SecondBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
-    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken cancellationToken)
     {
         OrderTracker.Add("Second-Before");
-        var response = await next();
+        var response = await next(message, cancellationToken);
         OrderTracker.Add("Second-After");
         return response;
     }
@@ -143,7 +143,7 @@ public class SecondBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, T
 public class ShortCircuitBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
-    public ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken cancellationToken)
     {
         // Short-circuit - don't call next
         var response = (TResponse)(object)new PongResponse("Short-circuited!");

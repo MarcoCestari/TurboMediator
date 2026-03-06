@@ -14,7 +14,7 @@ public sealed class StopOnFirstExceptionPublisher : INotificationPublisher
 
     /// <inheritdoc />
     public async ValueTask Publish<TNotification>(
-        IEnumerable<INotificationHandler<TNotification>> handlers,
+        INotificationHandler<TNotification>[] handlers,
         TNotification notification,
         CancellationToken cancellationToken)
         where TNotification : INotification

@@ -41,8 +41,7 @@ public class FluentValidationTests
         var called = false;
 
         var result = await behavior.Handle(
-            new CreateOrderCommand("Widget", 5, 9.99m),
-            () => { called = true; return new ValueTask<string>("ok"); },
+            new CreateOrderCommand("Widget", 5, 9.99m), (msg, ct) => { called = true; return new ValueTask<string>("ok"); },
             CancellationToken.None);
 
         result.Should().Be("ok");
@@ -57,7 +56,7 @@ public class FluentValidationTests
 
         var result = await behavior.Handle(
             new CreateOrderCommand("Widget", 5, 9.99m),
-            () => new ValueTask<string>("Order created"),
+            (msg, ct) => new ValueTask<string>("Order created"),
             CancellationToken.None);
 
         result.Should().Be("Order created");
@@ -71,7 +70,7 @@ public class FluentValidationTests
 
         var act = async () => await behavior.Handle(
             new CreateOrderCommand("", 0, -1),
-            () => new ValueTask<string>("should not reach"),
+            (msg, ct) => new ValueTask<string>("should not reach"),
             CancellationToken.None);
 
         var ex = await act.Should().ThrowAsync<TurboMediator.FluentValidation.ValidationException>();
@@ -92,7 +91,7 @@ public class FluentValidationTests
 
         var act = async () => await behavior.Handle(
             new CreateOrderCommand("", 0, 10m),
-            () => new ValueTask<string>("should not reach"),
+            (msg, ct) => new ValueTask<string>("should not reach"),
             CancellationToken.None);
 
         var ex = await act.Should().ThrowAsync<TurboMediator.FluentValidation.ValidationException>();

@@ -36,13 +36,13 @@ public class TimeoutBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var timeout = GetTimeout(message);
 
         // Use Task.WhenAny to race between the actual operation and a timeout
-        var task = next().AsTask();
+        var task = next(message, cancellationToken).AsTask();
         var delayTask = Task.Delay(timeout, cancellationToken);
 
         var completedTask = await Task.WhenAny(task, delayTask);

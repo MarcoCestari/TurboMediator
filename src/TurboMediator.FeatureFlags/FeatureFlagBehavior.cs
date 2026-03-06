@@ -34,12 +34,12 @@ public class FeatureFlagBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         if (_attributes == null || _attributes.Count == 0)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         foreach (var attribute in _attributes)
@@ -58,7 +58,7 @@ public class FeatureFlagBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
             }
         }
 
-        return await next();
+        return await next(message, cancellationToken);
     }
 
     private async ValueTask<bool> CheckFeatureAsync(FeatureFlagAttribute attribute, CancellationToken cancellationToken)

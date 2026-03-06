@@ -43,12 +43,12 @@ public sealed class DistributedLockingBehavior<TMessage, TResponse> : IPipelineB
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         // If the message type has no [DistributedLock] attribute, skip locking entirely.
         if (_lockAttr is null)
-            return await next();
+            return await next(message, cancellationToken);
 
         var lockKey = BuildLockKey(message, _lockAttr);
         var timeout = _lockAttr.TimeoutSeconds > 0
@@ -70,7 +70,7 @@ public sealed class DistributedLockingBehavior<TMessage, TResponse> : IPipelineB
 
         await using (handle)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
     }
 

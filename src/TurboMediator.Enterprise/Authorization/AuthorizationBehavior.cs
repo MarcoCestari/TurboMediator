@@ -30,7 +30,7 @@ public class AuthorizationBehavior<TMessage, TResponse> : IPipelineBehavior<TMes
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var messageType = typeof(TMessage);
@@ -38,7 +38,7 @@ public class AuthorizationBehavior<TMessage, TResponse> : IPipelineBehavior<TMes
         // Check for AllowAnonymous
         if (messageType.GetCustomAttributes(typeof(AllowAnonymousAttribute), false).Length > 0)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         // Get authorization attributes
@@ -49,7 +49,7 @@ public class AuthorizationBehavior<TMessage, TResponse> : IPipelineBehavior<TMes
         // If no authorization required, proceed
         if (authAttributes.Count == 0)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         // Check if user is authenticated
@@ -104,6 +104,6 @@ public class AuthorizationBehavior<TMessage, TResponse> : IPipelineBehavior<TMes
             }
         }
 
-        return await next();
+        return await next(message, cancellationToken);
     }
 }

@@ -75,7 +75,7 @@ public class TransactionBehaviorTests
         var command = new SimpleCommand("test");
         var handlerCalled = false;
 
-        var result = await behavior.Handle(command, () =>
+        var result = await behavior.Handle(command, (msg, ct) =>
         {
             handlerCalled = true;
             return ValueTask.FromResult("ok");
@@ -103,7 +103,7 @@ public class TransactionBehaviorTests
 
         var command = new TimeoutCommand("test");
 
-        var result = await behavior.Handle(command, () =>
+        var result = await behavior.Handle(command, (msg, ct) =>
         {
             return ValueTask.FromResult("done");
         }, CancellationToken.None);
@@ -130,7 +130,7 @@ public class TransactionBehaviorTests
 
         var command = new TimeoutCommand("test");
 
-        var result = await behavior.Handle(command, () =>
+        var result = await behavior.Handle(command, (msg, ct) =>
         {
             return ValueTask.FromResult("ok");
         }, CancellationToken.None);

@@ -88,7 +88,7 @@ public class RateLimitingBehaviorTests
         {
             var result = await behavior.Handle(
                 command,
-                async () => "success",
+                async (msg, ct) => "success",
                 CancellationToken.None);
 
             result.Should().Be("success");
@@ -109,13 +109,13 @@ public class RateLimitingBehaviorTests
         var command = new TestCommand("test");
 
         // Act - execute 2 requests (within limit)
-        await behavior.Handle(command, async () => "success", CancellationToken.None);
-        await behavior.Handle(command, async () => "success", CancellationToken.None);
+        await behavior.Handle(command, async (msg, ct) => "success", CancellationToken.None);
+        await behavior.Handle(command, async (msg, ct) => "success", CancellationToken.None);
 
         // 3rd request should throw
         var act = async () => await behavior.Handle(
             command,
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         // Assert
@@ -136,8 +136,8 @@ public class RateLimitingBehaviorTests
         var command = new TestCommand("test");
 
         // Act
-        await behavior.Handle(command, async () => "success", CancellationToken.None);
-        var result = await behavior.Handle(command, async () => "success", CancellationToken.None);
+        await behavior.Handle(command, async (msg, ct) => "success", CancellationToken.None);
+        var result = await behavior.Handle(command, async (msg, ct) => "success", CancellationToken.None);
 
         // Assert
         result.Should().BeNull();
@@ -159,14 +159,14 @@ public class RateLimitingBehaviorTests
         var command = new TestCommand("test");
 
         // Act - user1 makes 2 requests
-        await behavior.Handle(command, async () => "success", CancellationToken.None);
-        await behavior.Handle(command, async () => "success", CancellationToken.None);
+        await behavior.Handle(command, async (msg, ct) => "success", CancellationToken.None);
+        await behavior.Handle(command, async (msg, ct) => "success", CancellationToken.None);
 
         // Switch to user2
         currentUser = "user2";
 
         // user2 should still be able to make requests
-        var result = await behavior.Handle(command, async () => "success", CancellationToken.None);
+        var result = await behavior.Handle(command, async (msg, ct) => "success", CancellationToken.None);
 
         // Assert
         result.Should().Be("success");
@@ -244,7 +244,7 @@ public class RateLimitingBehaviorTests
         var tasks = Enumerable.Range(0, 3)
             .Select(_ => behavior.Handle(
                 command,
-                async () =>
+                async (msg, ct) =>
                 {
                     await Task.Delay(10);
                     return "success";
@@ -276,7 +276,7 @@ public class RateLimitingBehaviorTests
         var tasks = Enumerable.Range(0, 3)
             .Select(i => behavior.Handle(
                 command,
-                async () =>
+                async (msg, ct) =>
                 {
                     lock (lockObj) { executionOrder.Add(i); }
                     await Task.Delay(10);
@@ -312,7 +312,7 @@ public class RateLimitingBehaviorTests
         {
             return await behavior.Handle(
                 command,
-                async () =>
+                async (msg, ct) =>
                 {
                     await tcs.Task; // Wait until we signal completion
                     return "holding";
@@ -326,7 +326,7 @@ public class RateLimitingBehaviorTests
         // Act - try another request while bulkhead is full
         var act = async () => await behavior.Handle(
             command,
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         // Assert
@@ -402,7 +402,7 @@ public class RateLimitingBehaviorTests
 
         var result = await behavior.Handle(
             new TestMetricsCommand("test"),
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         result.Should().Be("success");
@@ -454,7 +454,7 @@ public class RateLimitingBehaviorTests
 
         var result = await behavior.Handle(
             new TestMetricsCommand("test"),
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         result.Should().Be("success");
@@ -508,13 +508,13 @@ public class RateLimitingBehaviorTests
 
         var command = new TestPolicyCommand("test");
 
-        var result1 = await behavior1.Handle(command, async () => "alpha-success", CancellationToken.None);
-        var result2 = await behavior2.Handle(command, async () => "beta-success", CancellationToken.None);
+        var result1 = await behavior1.Handle(command, async (msg, ct) => "alpha-success", CancellationToken.None);
+        var result2 = await behavior2.Handle(command, async (msg, ct) => "beta-success", CancellationToken.None);
 
         result1.Should().Be("alpha-success");
         result2.Should().Be("beta-success");
 
-        var act = async () => await behavior1.Handle(command, async () => "should-fail", CancellationToken.None);
+        var act = async () => await behavior1.Handle(command, async (msg, ct) => "should-fail", CancellationToken.None);
         await act.Should().ThrowAsync<RateLimitExceededException>();
     }
 
@@ -532,10 +532,10 @@ public class RateLimitingBehaviorTests
         using var behavior = new RateLimitingBehavior<TestPolicyCommand, string>(options);
         var command = new TestPolicyCommand("test");
 
-        var result = await behavior.Handle(command, async () => "success", CancellationToken.None);
+        var result = await behavior.Handle(command, async (msg, ct) => "success", CancellationToken.None);
         result.Should().Be("success");
 
-        var act = async () => await behavior.Handle(command, async () => "should-fail", CancellationToken.None);
+        var act = async () => await behavior.Handle(command, async (msg, ct) => "should-fail", CancellationToken.None);
         await act.Should().ThrowAsync<RateLimitExceededException>();
     }
 }

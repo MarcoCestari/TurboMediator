@@ -38,13 +38,13 @@ public class DeduplicationBehavior<TMessage, TResponse> : IPipelineBehavior<TMes
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         // Only process idempotent messages
         if (message is not IIdempotentMessage idempotentMessage)
         {
-            return await next().ConfigureAwait(false);
+            return await next(message, cancellationToken).ConfigureAwait(false);
         }
 
         var key = idempotentMessage.IdempotencyKey;
@@ -83,7 +83,7 @@ public class DeduplicationBehavior<TMessage, TResponse> : IPipelineBehavior<TMes
         try
         {
             // Execute the handler
-            var response = await next().ConfigureAwait(false);
+            var response = await next(message, cancellationToken).ConfigureAwait(false);
 
             // Store the response
             await _store.SetAsync(key, response, _options.TimeToLive, cancellationToken).ConfigureAwait(false);

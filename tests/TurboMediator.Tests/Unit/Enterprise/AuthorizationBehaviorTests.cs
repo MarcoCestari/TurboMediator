@@ -71,7 +71,7 @@ public class AuthorizationBehaviorTests
         var message = new NoAuthCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<NoAuthCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -95,7 +95,7 @@ public class AuthorizationBehaviorTests
         var message = new AnonymousAllowedCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<AnonymousAllowedCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -118,7 +118,7 @@ public class AuthorizationBehaviorTests
         var behavior = new AuthorizationBehavior<AuthenticatedCommand, string>(userContext, policyProvider);
         var message = new AuthenticatedCommand();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("Success");
+        MessageHandlerDelegate<AuthenticatedCommand, string> next = (msg, ct) => new ValueTask<string>("Success");
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<UnauthorizedException>(
@@ -139,7 +139,7 @@ public class AuthorizationBehaviorTests
         var message = new AuthenticatedCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<AuthenticatedCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -170,7 +170,7 @@ public class AuthorizationBehaviorTests
         var message = new RoleBasedCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<RoleBasedCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -200,7 +200,7 @@ public class AuthorizationBehaviorTests
         var behavior = new AuthorizationBehavior<RoleBasedCommand, string>(userContext, policyProvider);
         var message = new RoleBasedCommand();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("Success");
+        MessageHandlerDelegate<RoleBasedCommand, string> next = (msg, ct) => new ValueTask<string>("Success");
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<UnauthorizedException>(
@@ -229,7 +229,7 @@ public class AuthorizationBehaviorTests
         var message = new AdminPolicyCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<AdminPolicyCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -255,7 +255,7 @@ public class AuthorizationBehaviorTests
         var behavior = new AuthorizationBehavior<AdminPolicyCommand, string>(userContext, policyProvider);
         var message = new AdminPolicyCommand();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("Success");
+        MessageHandlerDelegate<AdminPolicyCommand, string> next = (msg, ct) => new ValueTask<string>("Success");
 
         // Act & Assert
         var exception = await Assert.ThrowsAsync<UnauthorizedException>(
@@ -277,7 +277,7 @@ public class AuthorizationBehaviorTests
         var message = new BearerOnlyCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<BearerOnlyCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -300,7 +300,7 @@ public class AuthorizationBehaviorTests
         var behavior = new AuthorizationBehavior<BearerOnlyCommand, string>(userContext);
         var message = new BearerOnlyCommand();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("Success");
+        MessageHandlerDelegate<BearerOnlyCommand, string> next = (msg, ct) => new ValueTask<string>("Success");
 
         // Act
         var act = async () => await behavior.Handle(message, next, CancellationToken.None);
@@ -321,7 +321,7 @@ public class AuthorizationBehaviorTests
         var message = new NoSchemeCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<NoSchemeCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -345,7 +345,7 @@ public class AuthorizationBehaviorTests
         var message = new MultipleSchemesCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<MultipleSchemesCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -368,7 +368,7 @@ public class AuthorizationBehaviorTests
         var behavior = new AuthorizationBehavior<MultipleSchemesCommand, string>(userContext);
         var message = new MultipleSchemesCommand();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("Success");
+        MessageHandlerDelegate<MultipleSchemesCommand, string> next = (msg, ct) => new ValueTask<string>("Success");
 
         // Act
         var act = async () => await behavior.Handle(message, next, CancellationToken.None);
@@ -388,7 +388,7 @@ public class AuthorizationBehaviorTests
         var message = new BearerOnlyCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<BearerOnlyCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -412,7 +412,7 @@ public class AuthorizationBehaviorTests
         var message = new BearerAndRoleCommand();
         var handlerCalled = false;
 
-        MessageHandlerDelegate<string> next = () =>
+        MessageHandlerDelegate<BearerAndRoleCommand, string> next = (msg, ct) =>
         {
             handlerCalled = true;
             return new ValueTask<string>("Success");
@@ -435,7 +435,7 @@ public class AuthorizationBehaviorTests
         var behavior = new AuthorizationBehavior<BearerAndRoleCommand, string>(userContext);
         var message = new BearerAndRoleCommand();
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("Success");
+        MessageHandlerDelegate<BearerAndRoleCommand, string> next = (msg, ct) => new ValueTask<string>("Success");
 
         // Act
         var act = async () => await behavior.Handle(message, next, CancellationToken.None);

@@ -40,13 +40,13 @@ public class HedgingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         if (_options.MaxParallelAttempts < 2)
         {
             // No hedging needed
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -57,7 +57,7 @@ public class HedgingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
         Exception? previousException = null;
 
         // Start the first attempt immediately
-        tasks.Add(ExecuteAttemptAsync(next, 1, previousException, linkedToken));
+        tasks.Add(ExecuteAttemptAsync(message, next, 1, previousException, linkedToken));
 
         // Start additional attempts with delay
         for (int i = 2; i <= _options.MaxParallelAttempts; i++)
@@ -90,7 +90,7 @@ public class HedgingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
             // Start next hedged attempt
             if (!linkedToken.IsCancellationRequested)
             {
-                tasks.Add(ExecuteAttemptAsync(next, attemptNumber, previousException, linkedToken));
+                tasks.Add(ExecuteAttemptAsync(message, next, attemptNumber, previousException, linkedToken));
             }
         }
 
@@ -140,7 +140,8 @@ public class HedgingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
     }
 
     private async Task<HedgingResult> ExecuteAttemptAsync(
-        MessageHandlerDelegate<TResponse> next,
+        TMessage message,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         int attemptNumber,
         Exception? previousException,
         CancellationToken cancellationToken)
@@ -153,7 +154,7 @@ public class HedgingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, 
                 _options.MaxParallelAttempts,
                 previousException));
 
-            var response = await next();
+            var response = await next(message, cancellationToken);
             return new HedgingResult(true, response, null);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)

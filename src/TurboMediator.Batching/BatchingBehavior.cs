@@ -38,7 +38,7 @@ public class BatchingBehavior<TQuery, TResponse> : IPipelineBehavior<TQuery, TRe
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TQuery message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TQuery, TResponse> next,
         CancellationToken cancellationToken)
     {
         var batchHandler = _serviceProvider.GetService<IBatchHandler<TQuery, TResponse>>();
@@ -53,7 +53,7 @@ public class BatchingBehavior<TQuery, TResponse> : IPipelineBehavior<TQuery, TRe
             }
 
             // Fall back to individual execution
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         var tcs = new TaskCompletionSource<TResponse>(TaskCreationOptions.RunContinuationsAsynchronously);

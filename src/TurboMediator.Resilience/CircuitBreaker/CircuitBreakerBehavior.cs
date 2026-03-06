@@ -33,7 +33,7 @@ public class CircuitBreakerBehavior<TMessage, TResponse> : IPipelineBehavior<TMe
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var options = GetOptions(message);
@@ -50,7 +50,7 @@ public class CircuitBreakerBehavior<TMessage, TResponse> : IPipelineBehavior<TMe
 
         try
         {
-            var response = await next();
+            var response = await next(message, cancellationToken);
             state.RecordSuccess();
             return response;
         }

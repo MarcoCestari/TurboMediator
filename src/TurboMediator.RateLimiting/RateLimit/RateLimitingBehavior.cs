@@ -38,7 +38,7 @@ public class RateLimitingBehavior<TMessage, TResponse> : IPipelineBehavior<TMess
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         // Check for attribute on message type
@@ -75,7 +75,7 @@ public class RateLimitingBehavior<TMessage, TResponse> : IPipelineBehavior<TMess
             return default!;
         }
 
-        return await next();
+        return await next(message, cancellationToken);
     }
 
     private RateLimitOptions MergeOptions(RateLimitAttribute? attribute)

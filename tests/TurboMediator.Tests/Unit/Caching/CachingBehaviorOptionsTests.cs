@@ -37,7 +37,7 @@ public class CachingBehaviorOptionsTests
         // GetWidgetQuery does NOT have [Cacheable] so the behavior skips caching
         var result = await behavior.Handle(
             new GetWidgetQuery(1),
-            () => new ValueTask<string>("widget-1"),
+            (msg, ct) => new ValueTask<string>("widget-1"),
             CancellationToken.None);
 
         result.Should().Be("widget-1");
@@ -51,8 +51,7 @@ public class CachingBehaviorOptionsTests
         var called = false;
 
         var result = await behavior.Handle(
-            new GetWidgetQuery(1),
-            () => { called = true; return new ValueTask<string>("result"); },
+            new GetWidgetQuery(1), (msg, ct) => { called = true; return new ValueTask<string>("result"); },
             CancellationToken.None);
 
         result.Should().Be("result");

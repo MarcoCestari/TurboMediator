@@ -9,12 +9,12 @@ public interface INotificationPublisher
     /// Publishes a notification to all registered handlers.
     /// </summary>
     /// <typeparam name="TNotification">The type of notification.</typeparam>
-    /// <param name="handlers">The collection of notification handlers.</param>
+    /// <param name="handlers">The array of notification handlers.</param>
     /// <param name="notification">The notification to publish.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>A ValueTask representing the asynchronous operation.</returns>
     ValueTask Publish<TNotification>(
-        IEnumerable<INotificationHandler<TNotification>> handlers,
+        INotificationHandler<TNotification>[] handlers,
         TNotification notification,
         CancellationToken cancellationToken)
         where TNotification : INotification;

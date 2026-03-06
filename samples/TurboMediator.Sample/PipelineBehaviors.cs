@@ -11,13 +11,13 @@ namespace TurboMediator.Sample;
 public class LoggingBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TResponse>
     where TMessage : IMessage
 {
-    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken cancellationToken)
     {
         var messageName = typeof(TMessage).Name;
         Console.WriteLine($"   📥 [LoggingBehavior] Handling {messageName}...");
 
         var stopwatch = Stopwatch.StartNew();
-        var response = await next();
+        var response = await next(message, cancellationToken);
         stopwatch.Stop();
 
         Console.WriteLine($"   📤 [LoggingBehavior] Handled {messageName} in {stopwatch.ElapsedMilliseconds}ms");
@@ -34,10 +34,10 @@ public class PerformanceBehavior<TMessage, TResponse> : IPipelineBehavior<TMessa
 {
     private const int SlowRequestThresholdMs = 100;
 
-    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
-        var response = await next();
+        var response = await next(message, cancellationToken);
         stopwatch.Stop();
 
         if (stopwatch.ElapsedMilliseconds > SlowRequestThresholdMs)

@@ -83,7 +83,7 @@ public class ObservabilityImprovementsTests
         // Act
         var result = await behavior.Handle(
             command,
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         // Assert
@@ -102,7 +102,7 @@ public class ObservabilityImprovementsTests
         // Act & Assert
         var act = async () => await behavior.Handle(
             command,
-            async () => throw new InvalidOperationException("Test error"),
+            async (msg, ct) => throw new InvalidOperationException("Test error"),
             CancellationToken.None);
 
         await act.Should().ThrowAsync<InvalidOperationException>()
@@ -155,7 +155,7 @@ public class ObservabilityImprovementsTests
         // Act
         var result = await behavior.Handle(
             command,
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         // Assert
@@ -173,7 +173,7 @@ public class ObservabilityImprovementsTests
         // Act
         var act = async () => await behavior.Handle(
             command,
-            async () => throw new InvalidOperationException("Test error"),
+            async (msg, ct) => throw new InvalidOperationException("Test error"),
             CancellationToken.None);
 
         // Assert
@@ -417,7 +417,7 @@ public class ObservabilityImprovementsTests
         };
         var behavior = new StructuredLoggingBehavior<TestLoggingCommand, string>(mockLogger.Object, options);
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("ok");
+        MessageHandlerDelegate<TestLoggingCommand, string> next = (msg, ct) => new ValueTask<string>("ok");
 
         await behavior.Handle(new TestLoggingCommand("test"), next, CancellationToken.None);
 
@@ -444,7 +444,7 @@ public class ObservabilityImprovementsTests
         };
         var behavior = new StructuredLoggingBehavior<TestLoggingCommand, string>(mockLogger.Object, options);
 
-        MessageHandlerDelegate<string> next = () => new ValueTask<string>("ok");
+        MessageHandlerDelegate<TestLoggingCommand, string> next = (msg, ct) => new ValueTask<string>("ok");
 
         await behavior.Handle(new TestLoggingCommand("test"), next, CancellationToken.None);
 

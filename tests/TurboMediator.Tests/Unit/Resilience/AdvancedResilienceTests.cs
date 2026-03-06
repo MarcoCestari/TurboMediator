@@ -79,7 +79,7 @@ public class AdvancedResilienceTests
         // Act
         var result = await behavior.Handle(
             command,
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         // Assert
@@ -99,7 +99,7 @@ public class AdvancedResilienceTests
         // Act
         var act = async () => await behavior.Handle(
             command,
-            async () => throw new InvalidOperationException("Primary failed"),
+            async (msg, ct) => throw new InvalidOperationException("Primary failed"),
             CancellationToken.None);
 
         // Assert
@@ -126,7 +126,7 @@ public class AdvancedResilienceTests
         // Act - should throw because InvalidOperationException is not handled
         var act = async () => await behavior.Handle(
             command,
-            async () => throw new InvalidOperationException("Not timeout"),
+            async (msg, ct) => throw new InvalidOperationException("Not timeout"),
             CancellationToken.None);
 
         // Assert
@@ -197,8 +197,7 @@ public class AdvancedResilienceTests
         // Act
         var result = await behavior.Handle(
             command,
-            async () =>
-            {
+            async (msg, ct) => {
                 Interlocked.Increment(ref callCount);
                 return "success";
             },
@@ -224,7 +223,7 @@ public class AdvancedResilienceTests
         // Act
         var act = async () => await behavior.Handle(
             command,
-            async () => throw new InvalidOperationException("Always fails"),
+            async (msg, ct) => throw new InvalidOperationException("Always fails"),
             CancellationToken.None);
 
         // Assert
@@ -242,7 +241,7 @@ public class AdvancedResilienceTests
         // Act
         var result = await behavior.Handle(
             command,
-            async () => "success",
+            async (msg, ct) => "success",
             CancellationToken.None);
 
         // Assert

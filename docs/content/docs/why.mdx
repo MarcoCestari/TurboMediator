@@ -176,11 +176,11 @@ public class LoggingBehavior<TRequest, TResponse> : IPipelineBehavior<TRequest, 
     where TRequest : IMessage
 {
     public async ValueTask<TResponse> Handle(
-        TRequest request, MessageHandlerDelegate<TResponse> next, CancellationToken ct)
+        TRequest request, MessageHandlerDelegate<TRequest, TResponse> next, CancellationToken ct)
     {
         _logger.LogInformation("Handling {Request}", typeof(TRequest).Name);
         var sw = Stopwatch.StartNew();
-        var response = await next();
+        var response = await next(request, ct);
         _logger.LogInformation("{Request} handled in {Elapsed}ms",
             typeof(TRequest).Name, sw.ElapsedMilliseconds);
         return response;

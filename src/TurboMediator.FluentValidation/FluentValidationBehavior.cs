@@ -30,12 +30,12 @@ public class FluentValidationBehavior<TMessage, TResponse> : IPipelineBehavior<T
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         if (!_validators.Any())
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         var context = new ValidationContext<TMessage>(message);
@@ -63,7 +63,7 @@ public class FluentValidationBehavior<TMessage, TResponse> : IPipelineBehavior<T
             throw new ValidationException(failures);
         }
 
-        return await next();
+        return await next(message, cancellationToken);
     }
 
     private static ValidationSeverity MapSeverity(Severity severity)

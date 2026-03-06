@@ -55,7 +55,7 @@ public class TurboPipelineBehavior<TMessage, TResponse>
 {
     public ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
-        => next();
+        => next(message, cancellationToken);
 }

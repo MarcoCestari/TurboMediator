@@ -61,7 +61,7 @@ public class BulkheadBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage,
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         // Check for attribute on message type
@@ -103,7 +103,7 @@ public class BulkheadBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage,
             {
                 Interlocked.Increment(ref bulkhead.CurrentConcurrency);
                 _concurrencyGauge?.Add(1, metricsTag);
-                return await next();
+                return await next(message, cancellationToken);
             }
             finally
             {

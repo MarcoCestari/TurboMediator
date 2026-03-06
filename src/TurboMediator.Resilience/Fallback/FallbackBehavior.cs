@@ -36,12 +36,12 @@ public class FallbackBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage,
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         try
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
         catch (Exception ex) when (ShouldHandleException(ex))
         {

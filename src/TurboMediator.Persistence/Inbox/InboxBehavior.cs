@@ -37,14 +37,14 @@ public class InboxBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TR
     }
 
     /// <inheritdoc />
-    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken cancellationToken)
+    public async ValueTask<TResponse> Handle(TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken cancellationToken)
     {
         var idempotencyKey = GetIdempotencyKey(message);
 
         // No idempotency key means this message doesn't participate in inbox deduplication
         if (idempotencyKey == null)
         {
-            return await next();
+            return await next(message, cancellationToken);
         }
 
         var handlerType = typeof(TMessage).FullName ?? typeof(TMessage).Name;
@@ -60,7 +60,7 @@ public class InboxBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TR
         }
 
         // Process the message
-        var response = await next();
+        var response = await next(message, cancellationToken);
 
         // Record in inbox
         var inboxMessage = new InboxMessage

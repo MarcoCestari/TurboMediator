@@ -49,8 +49,7 @@ public class CachingIntegrationTests : IAsyncLifetime
         // Act - first call should execute handler
         var result1 = await behavior.Handle(
             query,
-            async () =>
-            {
+            async (msg, ct) => {
                 callCount++;
                 return new ProductResponse(42, "Laptop", 2999.99m);
             },
@@ -59,8 +58,7 @@ public class CachingIntegrationTests : IAsyncLifetime
         // Act - second call should hit cache
         var result2 = await behavior.Handle(
             query,
-            async () =>
-            {
+            async (msg, ct) => {
                 callCount++;
                 return new ProductResponse(42, "Different", 0);
             },
@@ -81,12 +79,12 @@ public class CachingIntegrationTests : IAsyncLifetime
         // Act
         var result1 = await behavior.Handle(
             new GetProductQuery(1),
-            async () => new ProductResponse(1, "Product1", 10m),
+            async (msg, ct) => new ProductResponse(1, "Product1", 10m),
             CancellationToken.None);
 
         var result2 = await behavior.Handle(
             new GetProductQuery(2),
-            async () => new ProductResponse(2, "Product2", 20m),
+            async (msg, ct) => new ProductResponse(2, "Product2", 20m),
             CancellationToken.None);
 
         // Assert
@@ -208,12 +206,12 @@ public class CachingIntegrationTests : IAsyncLifetime
         // Act
         var result1 = await behavior.Handle(
             new NonCacheableQuery("test"),
-            async () => { callCount++; return "result"; },
+            async (msg, ct) => { callCount++; return "result"; },
             CancellationToken.None);
 
         var result2 = await behavior.Handle(
             new NonCacheableQuery("test"),
-            async () => { callCount++; return "result2"; },
+            async (msg, ct) => { callCount++; return "result2"; },
             CancellationToken.None);
 
         // Assert

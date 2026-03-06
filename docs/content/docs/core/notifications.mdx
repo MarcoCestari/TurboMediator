@@ -87,7 +87,7 @@ Implement `INotificationPublisher` to create your own strategy:
 public class PriorityNotificationPublisher : INotificationPublisher
 {
     public async ValueTask Publish<TNotification>(
-        IEnumerable<INotificationHandler<TNotification>> handlers,
+        INotificationHandler<TNotification>[] handlers,
         TNotification notification,
         CancellationToken cancellationToken)
         where TNotification : INotification

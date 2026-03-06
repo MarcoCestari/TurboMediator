@@ -17,14 +17,14 @@ public class PerformanceMonitoringBehavior<TMessage, TResponse> : IPipelineBehav
         => _logger = logger;
 
     public async ValueTask<TResponse> Handle(
-        TMessage message, MessageHandlerDelegate<TResponse> next, CancellationToken ct)
+        TMessage message, MessageHandlerDelegate<TMessage, TResponse> next, CancellationToken ct)
     {
         var messageName = typeof(TMessage).Name;
         var sw = Stopwatch.StartNew();
 
         _logger.LogInformation("[Pipeline] {MessageType} started", messageName);
 
-        var response = await next();
+        var response = await next(message, ct);
         sw.Stop();
 
         if (sw.ElapsedMilliseconds > 500)

@@ -82,7 +82,7 @@ public class InboxBehaviorTests
         var command = new IdempotentMessageCommand("order-123", "test data");
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<Unit> next = () =>
+        MessageHandlerDelegate<IdempotentMessageCommand, Unit> next = (msg, ct) =>
         {
             handlerCallCount++;
             return ValueTask.FromResult(Unit.Value);
@@ -113,7 +113,7 @@ public class InboxBehaviorTests
         var command = new IdempotentCommand("order-456", "test data");
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<Unit> next = () =>
+        MessageHandlerDelegate<IdempotentCommand, Unit> next = (msg, ct) =>
         {
             handlerCallCount++;
             return ValueTask.FromResult(Unit.Value);
@@ -138,7 +138,7 @@ public class InboxBehaviorTests
         var command = new NonIdempotentCommand("test");
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<Unit> next = () =>
+        MessageHandlerDelegate<NonIdempotentCommand, Unit> next = (msg, ct) =>
         {
             handlerCallCount++;
             return ValueTask.FromResult(Unit.Value);
@@ -165,7 +165,7 @@ public class InboxBehaviorTests
         var command3 = new HashBasedCommand("different", 99); // Different content
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<Unit> next = () =>
+        MessageHandlerDelegate<HashBasedCommand, Unit> next = (msg, ct) =>
         {
             handlerCallCount++;
             return ValueTask.FromResult(Unit.Value);
@@ -191,7 +191,7 @@ public class InboxBehaviorTests
         var behavior = new InboxBehavior<IdempotentMessageCommand, Unit>(inboxStore, logger);
         var handlerCallCount = 0;
 
-        MessageHandlerDelegate<Unit> next = () =>
+        MessageHandlerDelegate<IdempotentMessageCommand, Unit> next = (msg, ct) =>
         {
             handlerCallCount++;
             return ValueTask.FromResult(Unit.Value);
@@ -220,7 +220,7 @@ public class InboxBehaviorTests
         var behavior = new InboxBehavior<IdempotentMessageCommand, Unit>(inboxStore.Object, logger);
         var command = new IdempotentMessageCommand("key-1", "data");
 
-        MessageHandlerDelegate<Unit> next = () => ValueTask.FromResult(Unit.Value);
+        MessageHandlerDelegate<IdempotentMessageCommand, Unit> next = (msg, ct) => ValueTask.FromResult(Unit.Value);
 
         // Act - Should not throw even if recording fails
         var result = await behavior.Handle(command, next, CancellationToken.None);

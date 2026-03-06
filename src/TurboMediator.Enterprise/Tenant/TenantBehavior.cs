@@ -38,7 +38,7 @@ public class TenantBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, T
     /// <inheritdoc />
     public ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var messageType = typeof(TMessage);
@@ -62,6 +62,6 @@ public class TenantBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, T
             }
         }
 
-        return next();
+        return next(message, cancellationToken);
     }
 }

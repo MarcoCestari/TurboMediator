@@ -33,7 +33,7 @@ public class RetryBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TR
     /// <inheritdoc />
     public async ValueTask<TResponse> Handle(
         TMessage message,
-        MessageHandlerDelegate<TResponse> next,
+        MessageHandlerDelegate<TMessage, TResponse> next,
         CancellationToken cancellationToken)
     {
         var options = GetRetryOptions(message);
@@ -43,7 +43,7 @@ public class RetryBehavior<TMessage, TResponse> : IPipelineBehavior<TMessage, TR
         {
             try
             {
-                return await next();
+                return await next(message, cancellationToken);
             }
             catch (Exception ex) when (IsRetryableException(ex, options, cancellationToken))
             {
