@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TurboMediator.Benchmarks</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.14.*" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.*" />
+
+    <!-- MediatR (LuckyPennySoftware) -->
+    <PackageReference Include="MediatR" Version="12.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Shared types (Pong, etc.) -->
+    <ProjectReference Include="..\TurboMediator.Benchmarks.Shared\TurboMediator.Benchmarks.Shared.csproj" />
+
+    <!-- TurboMediator handlers (with source generator) -->
+    <ProjectReference Include="..\TurboMediator.Benchmarks.TurboHandlers\TurboMediator.Benchmarks.TurboHandlers.csproj" />
+
+    <!-- martinothamar/Mediator handlers (with source generator) -->
+    <ProjectReference Include="..\TurboMediator.Benchmarks.SourceGenHandlers\TurboMediator.Benchmarks.SourceGenHandlers.csproj" />
+  </ItemGroup>
+
+</Project>
