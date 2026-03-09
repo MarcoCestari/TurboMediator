@@ -1,4 +1,3 @@
-using System;
 using TurboMediator.Scheduling.DependencyInjection;
 
 namespace TurboMediator.Scheduling;

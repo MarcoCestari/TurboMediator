@@ -3,7 +3,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <ImplicitUsings>disable</ImplicitUsings>
+    <ImplicitUsings>enable</ImplicitUsings>
     <PackageId>TurboMediator.StateMachine.EntityFramework</PackageId>
     <Description>Entity Framework Core transition store implementation for TurboMediator.StateMachine</Description>
     <PackageTags>mediator;state-machine;efcore;entityframework;transitions</PackageTags>

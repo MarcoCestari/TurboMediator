@@ -1,5 +1,3 @@
-using System;
-
 namespace TurboMediator.Persistence.Outbox;
 
 /// <summary>

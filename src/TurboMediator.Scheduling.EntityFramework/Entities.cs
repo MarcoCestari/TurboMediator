@@ -1,5 +1,3 @@
-using System;
-
 namespace TurboMediator.Scheduling.EntityFramework;
 
 /// <summary>

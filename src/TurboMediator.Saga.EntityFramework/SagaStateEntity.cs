@@ -1,5 +1,3 @@
-using System;
-
 namespace TurboMediator.Saga.EntityFramework;
 
 /// <summary>
