@@ -5,12 +5,15 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
-    <RootNamespace>TurboMediator.Persistence.EF</RootNamespace>
+    <RootNamespace>TurboMediator.Persistence.EntityFramework</RootNamespace>
 
     <!-- Package Info -->
-    <PackageId>TurboMediator.Persistence.EF</PackageId>
+    <PackageId>TurboMediator.Persistence.EntityFramework</PackageId>
     <Description>Entity Framework Core provider for TurboMediator.Persistence - EF Core implementations of Transaction, Outbox, and Audit stores</Description>
     <PackageTags>mediator;cqrs;ef;efcore;entityframework;transaction;outbox;audit</PackageTags>
+
+    <!-- Documentation -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
 
   <ItemGroup>

@@ -48,7 +48,7 @@ dotnet add package TurboMediator.Validation
 dotnet add package TurboMediator.Enterprise
 dotnet add package TurboMediator.FluentValidation
 dotnet add package TurboMediator.Persistence
-dotnet add package TurboMediator.Persistence.EF
+dotnet add package TurboMediator.Persistence.EntityFramework
 dotnet add package TurboMediator.RateLimiting
 dotnet add package TurboMediator.FeatureFlags
 dotnet add package TurboMediator.FeatureFlags.FeatureManagement

@@ -46,7 +46,7 @@ Please be respectful and constructive in all interactions. We follow the [Contri
 │   ├── TurboMediator.Enterprise/
 │   ├── TurboMediator.FluentValidation/
 │   ├── TurboMediator.Persistence/
-│   ├── TurboMediator.Persistence.EF/
+│   ├── TurboMediator.Persistence.EntityFramework/
 │   ├── TurboMediator.RateLimiting/
 │   ├── TurboMediator.FeatureFlags/
 │   ├── TurboMediator.FeatureFlags.FeatureManagement/

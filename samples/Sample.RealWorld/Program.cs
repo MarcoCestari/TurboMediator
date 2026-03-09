@@ -41,7 +41,7 @@ using TurboMediator.FluentValidation;
 using TurboMediator.Observability;
 using TurboMediator.Persistence;
 using TurboMediator.Persistence.Audit;
-using TurboMediator.Persistence.EF;
+using TurboMediator.Persistence.EntityFramework;
 using TurboMediator.Persistence.Outbox;
 using Sample.RealWorld.Application;
 using Sample.RealWorld.Infrastructure;
@@ -55,10 +55,6 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<AppDbContext>(opt =>
     opt.UseSqlite("Data Source=realworld.db"));
-
-// Alias required for UseEfCoreTransactions() to resolve DbContext
-builder.Services.AddScoped<DbContext>(sp =>
-    sp.GetRequiredService<AppDbContext>());
 
 // =============================================================
 // Infrastructure: Auth & Tenant contexts
@@ -88,7 +84,7 @@ builder.Services.AddSingleton<IOutboxMessageBrokerPublisher, LoggingMessageBroke
 
 builder.Services.AddTurboMediator(m => m
     .WithSequentialNotifications()
-    .UseEfCoreTransactions()
+    .UseEfCoreTransactions<AppDbContext>()
 
     // Zero-reflection attribute scanning: auto-registers behaviors for all messages
     // decorated with [RequiresTenant], [Authorize], [Transactional], [Auditable].
@@ -118,7 +114,7 @@ builder.Services.AddTurboMediator(m => m
     // Transactional Outbox: integration events are persisted in the same
     // DB transaction as the command, then delivered by a background processor.
     .WithOutbox(outbox => outbox
-        .UseEfCoreStore()
+        .UseEfCoreStore<AppDbContext>()
         .AddProcessor()
             .WithProcessingInterval(TimeSpan.FromSeconds(5))
             .WithBatchSize(50)

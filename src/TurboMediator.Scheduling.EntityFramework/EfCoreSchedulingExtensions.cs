@@ -12,26 +12,24 @@ public static class EfCoreSchedulingExtensions
 {
     /// <summary>
     /// Uses Entity Framework Core for job persistence.
-    /// Requires <see cref="SchedulingDbContext"/> to be registered in the service collection.
+    /// Requires <typeparamref name="TContext"/> to be registered in the service collection
+    /// and to have applied <see cref="ModelBuilderExtensions.ApplySchedulingConfiguration"/> in its OnModelCreating.
     /// </summary>
-    public static SchedulingBuilder UseEfCoreStore(this SchedulingBuilder builder)
+    /// <typeparam name="TContext">The DbContext type that contains the scheduling entity configurations.</typeparam>
+    /// <param name="builder">The scheduling builder.</param>
+    /// <param name="configure">Optional configuration for the scheduling store.</param>
+    public static SchedulingBuilder UseEfCoreStore<TContext>(
+        this SchedulingBuilder builder,
+        Action<EfCoreSchedulingStoreOptions>? configure = null)
+        where TContext : DbContext
     {
-        builder.UseStore(sp => new EfCoreJobStore(sp.GetRequiredService<SchedulingDbContext>()));
-        return builder;
-    }
+        var options = new EfCoreSchedulingStoreOptions();
+        configure?.Invoke(options);
 
-    /// <summary>
-    /// Uses Entity Framework Core for job persistence with a custom DbContext configuration.
-    /// </summary>
-    public static SchedulingBuilder UseEfCoreStore(this SchedulingBuilder builder, Action<DbContextOptionsBuilder> configureDb)
-    {
-        builder.UseStore(sp =>
-        {
-            var optionsBuilder = new DbContextOptionsBuilder<SchedulingDbContext>();
-            configureDb(optionsBuilder);
-            var context = new SchedulingDbContext(optionsBuilder.Options);
-            return new EfCoreJobStore(context);
-        });
+        builder.UseStore(sp => new EfCoreJobStore<TContext>(
+            sp.GetRequiredService<TContext>(),
+            options));
+
         return builder;
     }
 }

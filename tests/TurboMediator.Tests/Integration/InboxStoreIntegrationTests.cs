@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using TurboMediator.Persistence.EF.Inbox;
+using TurboMediator.Persistence.EntityFramework;
+using TurboMediator.Persistence.EntityFramework.Inbox;
 using TurboMediator.Persistence.Inbox;
 using TurboMediator.Tests.IntegrationTests.Fixtures;
 using TurboMediator.Tests.IntegrationTests.Infrastructure;
@@ -48,7 +49,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task RecordAsync_ShouldPersistInboxMessage()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateInboxMessage("msg-001", "OrderHandler");
 
         // Act
@@ -68,7 +69,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task HasBeenProcessedAsync_ShouldReturnFalse_WhenNotRecorded()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         // Act
         var result = await store.HasBeenProcessedAsync("nonexistent-msg", "SomeHandler");
@@ -81,7 +82,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task HasBeenProcessedAsync_ShouldReturnTrue_WhenRecorded()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateInboxMessage("msg-002", "PaymentHandler");
         await store.RecordAsync(message);
 
@@ -96,7 +97,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task HasBeenProcessedAsync_ShouldReturnFalse_ForDifferentHandler()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateInboxMessage("msg-003", "HandlerA");
         await store.RecordAsync(message);
 
@@ -111,7 +112,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task RecordAsync_ShouldNotThrow_WhenDuplicateInserted()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message1 = CreateInboxMessage("msg-004", "DuplicateHandler");
         await store.RecordAsync(message1);
 
@@ -128,7 +129,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task RecordAsync_ShouldAllowSameMessageId_ForDifferentHandlers()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         // Act
         await store.RecordAsync(CreateInboxMessage("msg-005", "Handler1"));
@@ -145,7 +146,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task CleanupAsync_ShouldDeleteOldProcessedMessages()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         // Old processed message
         var oldMessage = CreateInboxMessage("old-msg", "CleanupHandler");
@@ -173,7 +174,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task CleanupAsync_ShouldNotDeleteUnprocessedMessages()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         var unprocessedMessage = new InboxMessage
         {
@@ -202,7 +203,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task FullLifecycle_CheckThenRecordThenVerify()
     {
         // Arrange
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var messageId = "lifecycle-msg";
         var handlerType = "LifecycleHandler";
 
@@ -225,7 +226,7 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
         var tasks = Enumerable.Range(0, 5).Select(async i =>
         {
             await using var ctx = CreateNewContext();
-            var store = new EfCoreInboxStore(ctx);
+            var store = new EfCoreInboxStore<IntegrationTestDbContext>(ctx, new EfCorePersistenceOptions());
             var message = CreateInboxMessage($"concurrent-msg-{i}", "ConcurrentHandler");
             await store.RecordAsync(message);
         });
@@ -244,12 +245,12 @@ public class InboxStoreIntegrationTests : IAsyncLifetime
     public async Task HasBeenProcessedAsync_WithNewContext_ShouldReflectPersistedState()
     {
         // Arrange - Record using one context
-        var store = new EfCoreInboxStore(_dbContext);
+        var store = new EfCoreInboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         await store.RecordAsync(CreateInboxMessage("cross-ctx-msg", "CrossCtxHandler"));
 
         // Act - Check using a different context (simulates different service instance)
         await using var otherCtx = CreateNewContext();
-        var otherStore = new EfCoreInboxStore(otherCtx);
+        var otherStore = new EfCoreInboxStore<IntegrationTestDbContext>(otherCtx, new EfCorePersistenceOptions());
         var result = await otherStore.HasBeenProcessedAsync("cross-ctx-msg", "CrossCtxHandler");
 
         // Assert

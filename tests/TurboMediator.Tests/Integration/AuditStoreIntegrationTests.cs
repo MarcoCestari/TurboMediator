@@ -1,7 +1,8 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using TurboMediator.Persistence.Audit;
-using TurboMediator.Persistence.EF.Audit;
+using TurboMediator.Persistence.EntityFramework;
+using TurboMediator.Persistence.EntityFramework.Audit;
 using TurboMediator.Tests.IntegrationTests.Fixtures;
 using TurboMediator.Tests.IntegrationTests.Infrastructure;
 using Xunit;
@@ -48,7 +49,7 @@ public class AuditStoreIntegrationTests : IAsyncLifetime
     public async Task SaveAsync_ShouldPersistAuditEntry()
     {
         // Arrange
-        var store = new EfCoreAuditStore(_dbContext);
+        var store = new EfCoreAuditStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var entry = CreateAuditEntry("CreateOrder", "Order", "ORD-001", "user-1");
 
         // Act
@@ -69,7 +70,7 @@ public class AuditStoreIntegrationTests : IAsyncLifetime
     public async Task GetByEntityAsync_ShouldReturnMatchingEntries()
     {
         // Arrange
-        var store = new EfCoreAuditStore(_dbContext);
+        var store = new EfCoreAuditStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         await store.SaveAsync(CreateAuditEntry("Create", "Order", "ORD-100", "user-1"));
         await store.SaveAsync(CreateAuditEntry("Update", "Order", "ORD-100", "user-2"));
         await store.SaveAsync(CreateAuditEntry("Create", "Order", "ORD-200", "user-1"));
@@ -91,7 +92,7 @@ public class AuditStoreIntegrationTests : IAsyncLifetime
     public async Task GetByEntityAsync_ShouldReturnOrderedByTimestampDescending()
     {
         // Arrange
-        var store = new EfCoreAuditStore(_dbContext);
+        var store = new EfCoreAuditStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var older = CreateAuditEntry("Create", "Inv", "INV-1", "user-1");
         older.Timestamp = DateTime.UtcNow.AddHours(-2);
         await store.SaveAsync(older);
@@ -116,7 +117,7 @@ public class AuditStoreIntegrationTests : IAsyncLifetime
     public async Task GetByUserAsync_ShouldReturnUserEntries()
     {
         // Arrange
-        var store = new EfCoreAuditStore(_dbContext);
+        var store = new EfCoreAuditStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         await store.SaveAsync(CreateAuditEntry("Action1", "Entity", "E1", "admin"));
         await store.SaveAsync(CreateAuditEntry("Action2", "Entity", "E2", "admin"));
         await store.SaveAsync(CreateAuditEntry("Action3", "Entity", "E3", "other-user"));
@@ -137,7 +138,7 @@ public class AuditStoreIntegrationTests : IAsyncLifetime
     public async Task GetByTimeRangeAsync_ShouldFilterByRange()
     {
         // Arrange
-        var store = new EfCoreAuditStore(_dbContext);
+        var store = new EfCoreAuditStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         var now = DateTime.UtcNow;
         var e1 = CreateAuditEntry("Old", "E", "1", "u");
@@ -170,7 +171,7 @@ public class AuditStoreIntegrationTests : IAsyncLifetime
     public async Task SaveAsync_ShouldPersistFailureDetails()
     {
         // Arrange
-        var store = new EfCoreAuditStore(_dbContext);
+        var store = new EfCoreAuditStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var entry = CreateAuditEntry("FailedAction", "Order", "ORD-ERR", "user-1");
         entry.Success = false;
         entry.ErrorMessage = "Validation failed: invalid email";
@@ -191,7 +192,7 @@ public class AuditStoreIntegrationTests : IAsyncLifetime
     public async Task SaveAsync_ShouldPersistMetadata()
     {
         // Arrange
-        var store = new EfCoreAuditStore(_dbContext);
+        var store = new EfCoreAuditStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var entry = CreateAuditEntry("MetaAction", "E", "1", "u");
         entry.RequestPayload = "{\"name\":\"test\"}";
         entry.ResponsePayload = "{\"id\":1}";
@@ -221,7 +222,7 @@ public class AuditStoreIntegrationTests : IAsyncLifetime
         var tasks = Enumerable.Range(0, 10).Select(async i =>
         {
             await using var ctx = CreateNewContext();
-            var store = new EfCoreAuditStore(ctx);
+            var store = new EfCoreAuditStore<IntegrationTestDbContext>(ctx, new EfCorePersistenceOptions());
             var entry = CreateAuditEntry($"ConcurrentAction{i}", "E", $"id-{i}", $"user-{i}");
             await store.SaveAsync(entry);
             return entry.Id;

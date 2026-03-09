@@ -42,7 +42,7 @@
     <ProjectReference Include="..\..\src\TurboMediator.Validation\TurboMediator.Validation.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.Enterprise\TurboMediator.Enterprise.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.FluentValidation\TurboMediator.FluentValidation.csproj" />
-    <ProjectReference Include="..\..\src\TurboMediator.Persistence.EF\TurboMediator.Persistence.EF.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Persistence.EntityFramework\TurboMediator.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.RateLimiting\TurboMediator.RateLimiting.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.Saga\TurboMediator.Saga.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.FeatureFlags\TurboMediator.FeatureFlags.csproj" />

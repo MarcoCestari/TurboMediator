@@ -11,7 +11,7 @@
     <ProjectReference Include="..\..\src\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.Enterprise\TurboMediator.Enterprise.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.Persistence\TurboMediator.Persistence.csproj" />
-    <ProjectReference Include="..\..\src\TurboMediator.Persistence.EF\TurboMediator.Persistence.EF.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Persistence.EntityFramework\TurboMediator.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.FluentValidation\TurboMediator.FluentValidation.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.Observability\TurboMediator.Observability.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.SourceGenerator\TurboMediator.SourceGenerator.csproj"

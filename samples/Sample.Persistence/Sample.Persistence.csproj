@@ -10,7 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\TurboMediator.Abstractions\TurboMediator.Abstractions.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.Persistence\TurboMediator.Persistence.csproj" />
-    <ProjectReference Include="..\..\src\TurboMediator.Persistence.EF\TurboMediator.Persistence.EF.csproj" />
+    <ProjectReference Include="..\..\src\TurboMediator.Persistence.EntityFramework\TurboMediator.Persistence.EntityFramework.csproj" />
     <ProjectReference Include="..\..\src\TurboMediator.SourceGenerator\TurboMediator.SourceGenerator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />

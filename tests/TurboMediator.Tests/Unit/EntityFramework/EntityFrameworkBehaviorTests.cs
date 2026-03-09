@@ -2,9 +2,10 @@ using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
-using TurboMediator.Persistence.EF.Audit;
-using TurboMediator.Persistence.EF.Outbox;
-using TurboMediator.Persistence.EF.Transaction;
+using TurboMediator.Persistence.EntityFramework;
+using TurboMediator.Persistence.EntityFramework.Audit;
+using TurboMediator.Persistence.EntityFramework.Outbox;
+using TurboMediator.Persistence.EntityFramework.Transaction;
 using TurboMediator.Persistence.Audit;
 using TurboMediator.Persistence.Outbox;
 using TurboMediator.Persistence.Transaction;
@@ -29,7 +30,7 @@ public class EntityFrameworkBehaviorTests
             .Options;
 
         using var dbContext = new TestDbContext(options);
-        var transactionManager = new EfCoreTransactionManager(dbContext);
+        var transactionManager = new EfCoreTransactionManager<TestDbContext>(dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var behavior = new TransactionBehavior<CreateEntityCommand, TestEntity>(transactionManager, transactionOptions);
 
@@ -64,7 +65,7 @@ public class EntityFrameworkBehaviorTests
             .Options;
 
         using var dbContext = new TestDbContext(options);
-        var transactionManager = new EfCoreTransactionManager(dbContext);
+        var transactionManager = new EfCoreTransactionManager<TestDbContext>(dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = false };
         var behavior = new TransactionBehavior<CreateEntityCommand, TestEntity>(transactionManager, transactionOptions);
 
@@ -211,7 +212,7 @@ public class EntityFrameworkBehaviorTests
             .Options;
 
         using var dbContext = new OutboxTestDbContext(options);
-        var outboxStore = new EfCoreOutboxStore(dbContext);
+        var outboxStore = new EfCoreOutboxStore<OutboxTestDbContext>(dbContext, new EfCorePersistenceOptions());
 
         var message = new OutboxMessage
         {
@@ -240,7 +241,7 @@ public class EntityFrameworkBehaviorTests
             .Options;
 
         using var dbContext = new OutboxTestDbContext(options);
-        var outboxStore = new EfCoreOutboxStore(dbContext);
+        var outboxStore = new EfCoreOutboxStore<OutboxTestDbContext>(dbContext, new EfCorePersistenceOptions());
 
         var messageId = Guid.NewGuid();
         var message = new OutboxMessage
@@ -273,7 +274,7 @@ public class EntityFrameworkBehaviorTests
             .Options;
 
         using var dbContext = new OutboxTestDbContext(options);
-        var outboxStore = new EfCoreOutboxStore(dbContext);
+        var outboxStore = new EfCoreOutboxStore<OutboxTestDbContext>(dbContext, new EfCorePersistenceOptions());
 
         var messageId = Guid.NewGuid();
         var message = new OutboxMessage

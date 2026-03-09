@@ -27,7 +27,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TurboMediator.Enterprise", 
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TurboMediator.FluentValidation", "src\TurboMediator.FluentValidation\TurboMediator.FluentValidation.csproj", "{8207C5E5-A291-462D-AA08-52239AC67A73}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TurboMediator.Persistence.EF", "src\TurboMediator.Persistence.EF\TurboMediator.Persistence.EF.csproj", "{1A8B39BA-A50F-4CEA-95E5-A50D75A4F203}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TurboMediator.Persistence.EntityFramework", "src\TurboMediator.Persistence.EntityFramework\TurboMediator.Persistence.EntityFramework.csproj", "{1A8B39BA-A50F-4CEA-95E5-A50D75A4F203}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TurboMediator.RateLimiting", "src\TurboMediator.RateLimiting\TurboMediator.RateLimiting.csproj", "{BD7D517D-4798-42EF-BEE4-F78B53E6A6EF}"
 EndProject

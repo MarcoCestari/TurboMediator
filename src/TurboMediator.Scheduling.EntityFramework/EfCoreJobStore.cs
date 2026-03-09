@@ -11,48 +11,65 @@ namespace TurboMediator.Scheduling.EntityFramework;
 /// <summary>
 /// Entity Framework Core implementation of <see cref="IJobStore"/>.
 /// Provides persistent storage with optimistic concurrency for multi-instance deployments.
+/// Uses a generic <typeparamref name="TContext"/> so the application's own DbContext can be reused.
 /// </summary>
-public sealed class EfCoreJobStore : IJobStore
+/// <typeparam name="TContext">The DbContext type that contains the scheduling entity configurations.</typeparam>
+public sealed class EfCoreJobStore<TContext> : IJobStore where TContext : DbContext
 {
-    private readonly SchedulingDbContext _db;
+    private readonly TContext _context;
+    private readonly EfCoreSchedulingStoreOptions _options;
+    private static volatile bool _initialized;
 
     /// <summary>Creates a new EfCoreJobStore.</summary>
-    public EfCoreJobStore(SchedulingDbContext db)
+    public EfCoreJobStore(TContext context, EfCoreSchedulingStoreOptions options)
     {
-        _db = db ?? throw new ArgumentNullException(nameof(db));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _options = options ?? throw new ArgumentNullException(nameof(options));
+    }
+
+    private async Task EnsureInitializedAsync(CancellationToken ct)
+    {
+        if (_initialized || !_options.AutoMigrate) return;
+        await _context.Database.EnsureCreatedAsync(ct);
+        _initialized = true;
     }
 
     public async Task UpsertJobAsync(RecurringJobRecord job, CancellationToken ct = default)
     {
-        var entity = await _db.RecurringJobs.FindAsync(new object[] { job.JobId }, ct);
+        await EnsureInitializedAsync(ct);
+        var set = _context.Set<RecurringJobEntity>();
+        var entity = await set.FindAsync(new object[] { job.JobId }, ct);
         if (entity == null)
         {
             entity = new RecurringJobEntity();
             MapToEntity(job, entity);
-            _db.RecurringJobs.Add(entity);
+            set.Add(entity);
         }
         else
         {
             MapToEntity(job, entity);
         }
-        await _db.SaveChangesAsync(ct);
+        await _context.SaveChangesAsync(ct);
     }
 
     public async Task<RecurringJobRecord?> GetJobAsync(string jobId, CancellationToken ct = default)
     {
-        var entity = await _db.RecurringJobs.AsNoTracking().FirstOrDefaultAsync(j => j.JobId == jobId, ct);
+        await EnsureInitializedAsync(ct);
+        var entity = await _context.Set<RecurringJobEntity>().AsNoTracking().FirstOrDefaultAsync(j => j.JobId == jobId, ct);
         return entity == null ? null : MapToRecord(entity);
     }
 
     public async Task<IReadOnlyList<RecurringJobRecord>> GetAllJobsAsync(CancellationToken ct = default)
     {
-        var entities = await _db.RecurringJobs.AsNoTracking().ToListAsync(ct);
+        await EnsureInitializedAsync(ct);
+        var entities = await _context.Set<RecurringJobEntity>().AsNoTracking().ToListAsync(ct);
         return entities.Select(MapToRecord).ToList();
     }
 
     public async Task<IReadOnlyList<RecurringJobRecord>> GetDueJobsAsync(DateTimeOffset now, CancellationToken ct = default)
     {
-        var entities = await _db.RecurringJobs
+        await EnsureInitializedAsync(ct);
+        var entities = await _context.Set<RecurringJobEntity>()
             .AsNoTracking()
             .Where(j => j.Status != JobStatus.Paused
                         && j.Status != JobStatus.Running
@@ -67,22 +84,26 @@ public sealed class EfCoreJobStore : IJobStore
 
     public async Task<bool> RemoveJobAsync(string jobId, CancellationToken ct = default)
     {
-        var entity = await _db.RecurringJobs.FindAsync(new object[] { jobId }, ct);
+        await EnsureInitializedAsync(ct);
+        var jobSet = _context.Set<RecurringJobEntity>();
+        var occurrenceSet = _context.Set<JobOccurrenceEntity>();
+        var entity = await jobSet.FindAsync(new object[] { jobId }, ct);
         if (entity == null)
             return false;
 
         // Remove all occurrences
-        var occurrences = await _db.JobOccurrences.Where(o => o.JobId == jobId).ToListAsync(ct);
-        _db.JobOccurrences.RemoveRange(occurrences);
-        _db.RecurringJobs.Remove(entity);
+        var occurrences = await occurrenceSet.Where(o => o.JobId == jobId).ToListAsync(ct);
+        occurrenceSet.RemoveRange(occurrences);
+        jobSet.Remove(entity);
 
-        await _db.SaveChangesAsync(ct);
+        await _context.SaveChangesAsync(ct);
         return true;
     }
 
     public async Task<bool> TryLockJobAsync(string jobId, CancellationToken ct = default)
     {
-        var entity = await _db.RecurringJobs.FirstOrDefaultAsync(j => j.JobId == jobId, ct);
+        await EnsureInitializedAsync(ct);
+        var entity = await _context.Set<RecurringJobEntity>().FirstOrDefaultAsync(j => j.JobId == jobId, ct);
         if (entity == null || entity.Status == JobStatus.Running || entity.Status == JobStatus.Paused)
             return false;
 
@@ -91,7 +112,7 @@ public sealed class EfCoreJobStore : IJobStore
 
         try
         {
-            await _db.SaveChangesAsync(ct);
+            await _context.SaveChangesAsync(ct);
             return true;
         }
         catch (DbUpdateConcurrencyException)
@@ -102,40 +123,44 @@ public sealed class EfCoreJobStore : IJobStore
 
     public async Task ReleaseJobAsync(string jobId, JobStatus newStatus, DateTimeOffset? nextRunAt, CancellationToken ct = default)
     {
-        var entity = await _db.RecurringJobs.FirstOrDefaultAsync(j => j.JobId == jobId, ct);
+        await EnsureInitializedAsync(ct);
+        var entity = await _context.Set<RecurringJobEntity>().FirstOrDefaultAsync(j => j.JobId == jobId, ct);
         if (entity != null)
         {
             entity.Status = newStatus;
             entity.NextRunAt = nextRunAt;
             entity.LastRunAt = DateTimeOffset.UtcNow;
             entity.UpdatedAt = DateTimeOffset.UtcNow;
-            await _db.SaveChangesAsync(ct);
+            await _context.SaveChangesAsync(ct);
         }
     }
 
     public async Task AddOccurrenceAsync(JobOccurrenceRecord occurrence, CancellationToken ct = default)
     {
+        await EnsureInitializedAsync(ct);
         var entity = MapToOccurrenceEntity(occurrence);
-        _db.JobOccurrences.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        _context.Set<JobOccurrenceEntity>().Add(entity);
+        await _context.SaveChangesAsync(ct);
     }
 
     public async Task UpdateOccurrenceAsync(JobOccurrenceRecord occurrence, CancellationToken ct = default)
     {
-        var entity = await _db.JobOccurrences.FindAsync(new object[] { occurrence.Id }, ct);
+        await EnsureInitializedAsync(ct);
+        var entity = await _context.Set<JobOccurrenceEntity>().FindAsync(new object[] { occurrence.Id }, ct);
         if (entity != null)
         {
             entity.Status = occurrence.Status;
             entity.CompletedAt = occurrence.CompletedAt;
             entity.RetryCount = occurrence.RetryCount;
             entity.Error = occurrence.Error;
-            await _db.SaveChangesAsync(ct);
+            await _context.SaveChangesAsync(ct);
         }
     }
 
     public async Task<IReadOnlyList<JobOccurrenceRecord>> GetOccurrencesAsync(string jobId, int limit = 20, CancellationToken ct = default)
     {
-        var entities = await _db.JobOccurrences
+        await EnsureInitializedAsync(ct);
+        var entities = await _context.Set<JobOccurrenceEntity>()
             .AsNoTracking()
             .Where(o => o.JobId == jobId)
             .OrderByDescending(o => o.StartedAt)

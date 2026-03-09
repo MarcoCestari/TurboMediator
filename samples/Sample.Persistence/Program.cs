@@ -10,7 +10,7 @@ using TurboMediator;
 using TurboMediator.Generated;
 using TurboMediator.Persistence;
 using TurboMediator.Persistence.Audit;
-using TurboMediator.Persistence.EF;
+using TurboMediator.Persistence.EntityFramework;
 using TurboMediator.Persistence.Outbox;
 using TurboMediator.Persistence.Transaction;
 using Sample.Persistence;
@@ -20,11 +20,10 @@ var builder = WebApplication.CreateBuilder(args);
 // EF Core InMemory
 builder.Services.AddDbContext<BankDbContext>(opt =>
     opt.UseInMemoryDatabase("BankDb"));
-builder.Services.AddScoped<DbContext>(sp => sp.GetRequiredService<BankDbContext>());
 
 builder.Services.AddTurboMediator(m => m
     // EF Core as infrastructure
-    .UseEfCoreTransactions()
+    .UseEfCoreTransactions<BankDbContext>()
 
     // Transactions for commands
     .WithTransaction<TransferBetweenAccountsCommand, TransferResult>()

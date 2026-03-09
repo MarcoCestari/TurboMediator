@@ -65,7 +65,7 @@ jobs:
           dotnet pack src/TurboMediator.FluentValidation/TurboMediator.FluentValidation.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
           dotnet pack src/TurboMediator.Observability/TurboMediator.Observability.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
           dotnet pack src/TurboMediator.Persistence/TurboMediator.Persistence.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
-          dotnet pack src/TurboMediator.Persistence.EF/TurboMediator.Persistence.EF.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
+          dotnet pack src/TurboMediator.Persistence.EntityFramework/TurboMediator.Persistence.EntityFramework.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
           dotnet pack src/TurboMediator.RateLimiting/TurboMediator.RateLimiting.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
           dotnet pack src/TurboMediator.Resilience/TurboMediator.Resilience.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs
           dotnet pack src/TurboMediator.Result/TurboMediator.Result.csproj -c Release --no-build -p:Version=${{ steps.version.outputs.VERSION }} -o ./nupkgs

@@ -1,3 +1,5 @@
+using System;
+
 namespace TurboMediator.StateMachine.EntityFramework;
 
 /// <summary>

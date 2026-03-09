@@ -2,7 +2,7 @@ using System.Data;
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
-using TurboMediator.Persistence.EF.Transaction;
+using TurboMediator.Persistence.EntityFramework.Transaction;
 using TurboMediator.Persistence.Transaction;
 using TurboMediator.Tests.IntegrationTests.Fixtures;
 using TurboMediator.Tests.IntegrationTests.Infrastructure;
@@ -47,7 +47,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
     public async Task Transaction_ShouldCommitOnSuccess()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var behavior = new TransactionBehavior<CreateProductCommand, TestProduct>(transactionManager, transactionOptions);
 
@@ -78,7 +78,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
     public async Task Transaction_ShouldRollbackOnException()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var behavior = new TransactionBehavior<CreateProductCommand, TestProduct>(transactionManager, transactionOptions);
 
@@ -106,7 +106,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
     public async Task Transaction_ShouldSupportReadCommittedIsolation()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions
         {
             IsolationLevel = IsolationLevel.ReadCommitted,
@@ -137,7 +137,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
     public async Task Transaction_ShouldSupportSerializableIsolation()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions
         {
             IsolationLevel = IsolationLevel.Serializable,
@@ -168,7 +168,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
     public async Task Transaction_WithAutoSaveDisabled_ShouldNotPersistWithoutExplicitSave()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = false };
         var behavior = new TransactionBehavior<CreateProductCommand, TestProduct>(transactionManager, transactionOptions);
 
@@ -194,7 +194,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
     public async Task Transaction_MultipleOperations_ShouldBeAtomic()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var behavior = new TransactionBehavior<CreateProductCommand, TestProduct>(transactionManager, transactionOptions);
 
@@ -227,7 +227,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
     public async Task Transaction_ExecuteWithStrategy_ShouldWork()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
 
         // Act
         var result = await transactionManager.ExecuteWithStrategyAsync<TestProduct>(async ct =>
@@ -262,7 +262,7 @@ public class TransactionIntegrationTests : IAsyncLifetime
     public async Task Transaction_HasActiveTransaction_ShouldReflectState()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
 
         // Assert - no active transaction initially
         transactionManager.HasActiveTransaction.Should().BeFalse();

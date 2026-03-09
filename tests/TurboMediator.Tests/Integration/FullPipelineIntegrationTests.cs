@@ -4,9 +4,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using TurboMediator.Persistence.Audit;
-using TurboMediator.Persistence.EF.Audit;
-using TurboMediator.Persistence.EF.Outbox;
-using TurboMediator.Persistence.EF.Transaction;
+using TurboMediator.Persistence.EntityFramework;
+using TurboMediator.Persistence.EntityFramework.Audit;
+using TurboMediator.Persistence.EntityFramework.Outbox;
+using TurboMediator.Persistence.EntityFramework.Transaction;
 using TurboMediator.Persistence.Outbox;
 using TurboMediator.Persistence.Transaction;
 using TurboMediator.Tests.IntegrationTests.Fixtures;
@@ -59,8 +60,8 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
     public async Task TransactionWithAudit_ShouldPersistBothOnSuccess()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
-        var auditStore = new EfCoreAuditStore(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
+        var auditStore = new EfCoreAuditStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var txBehavior = new TransactionBehavior<CreateProductWithAuditCommand, TestProduct>(
@@ -106,7 +107,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
     public async Task TransactionWithAudit_ShouldRollbackBothOnFailure()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var txBehavior = new TransactionBehavior<CreateProductWithAuditCommand, TestProduct>(
             transactionManager, transactionOptions);
@@ -147,7 +148,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
     public async Task TransactionWithOutbox_ShouldPersistBothAtomically()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var txBehavior = new TransactionBehavior<CreateProductWithOutboxCommand, TestProduct>(
             transactionManager, transactionOptions);
@@ -189,7 +190,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
     public async Task TransactionWithOutbox_ShouldRollbackBothOnFailure()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var txBehavior = new TransactionBehavior<CreateProductWithOutboxCommand, TestProduct>(
             transactionManager, transactionOptions);
@@ -229,7 +230,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
     public async Task OutboxProcessor_ShouldProcessPendingMessages()
     {
         // Arrange - seed pending outbox messages
-        var outboxStore = new EfCoreOutboxStore(_dbContext);
+        var outboxStore = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var msg1 = new OutboxMessage
         {
             Id = Guid.NewGuid(),
@@ -254,8 +255,8 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
         var services = new ServiceCollection();
         services.AddDbContext<IntegrationTestDbContext>(options =>
             options.UseNpgsql(_fixture.ConnectionString));
-        services.AddScoped<IOutboxStore, EfCoreOutboxStore>(sp =>
-            new EfCoreOutboxStore(sp.GetRequiredService<IntegrationTestDbContext>()));
+        services.AddScoped<IOutboxStore, EfCoreOutboxStore<IntegrationTestDbContext>>(sp =>
+            new EfCoreOutboxStore<IntegrationTestDbContext>(sp.GetRequiredService<IntegrationTestDbContext>(), new EfCorePersistenceOptions()));
         services.AddLogging(b => b.AddDebug());
 
         await using var sp = services.BuildServiceProvider();
@@ -296,7 +297,7 @@ public class FullPipelineIntegrationTests : IAsyncLifetime
     public async Task FullPipeline_TransactionAuditOutbox_AllPersisted()
     {
         // Arrange
-        var transactionManager = new EfCoreTransactionManager(_dbContext);
+        var transactionManager = new EfCoreTransactionManager<IntegrationTestDbContext>(_dbContext);
         var transactionOptions = new TransactionOptions { AutoSaveChanges = true };
         var txBehavior = new TransactionBehavior<CreateProductFullCommand, TestProduct>(
             transactionManager, transactionOptions);

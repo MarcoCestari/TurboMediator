@@ -1,6 +1,7 @@
 using FluentAssertions;
 using Microsoft.EntityFrameworkCore;
-using TurboMediator.Persistence.EF.Outbox;
+using TurboMediator.Persistence.EntityFramework;
+using TurboMediator.Persistence.EntityFramework.Outbox;
 using TurboMediator.Persistence.Outbox;
 using TurboMediator.Tests.IntegrationTests.Fixtures;
 using TurboMediator.Tests.IntegrationTests.Infrastructure;
@@ -49,7 +50,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task SaveAsync_ShouldPersistMessage()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("OrderCreated", "{\"orderId\":123}");
 
         // Act
@@ -68,7 +69,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task GetPendingAsync_ShouldReturnPendingMessages()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         await store.SaveAsync(CreateOutboxMessage("Event1", "{}", OutboxMessageStatus.Pending));
         await store.SaveAsync(CreateOutboxMessage("Event2", "{}", OutboxMessageStatus.Pending));
         await store.SaveAsync(CreateOutboxMessage("Event3", "{}", OutboxMessageStatus.Processed));
@@ -89,7 +90,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task GetPendingAsync_ShouldRespectBatchSize()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         for (int i = 0; i < 10; i++)
         {
             await store.SaveAsync(CreateOutboxMessage($"BatchEvent{i}", "{}"));
@@ -110,7 +111,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task GetPendingAsync_ShouldIncludeRetriedMessagesUnderRetryLimit()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         var retriedUnderLimit = CreateOutboxMessage("RetriedUnderLimit", "{}");
         retriedUnderLimit.Status = OutboxMessageStatus.Pending;
@@ -140,7 +141,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task MarkAsProcessingAsync_ShouldUpdateStatus()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("ProcessingTest", "{}");
         await store.SaveAsync(message);
 
@@ -157,7 +158,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task MarkAsProcessedAsync_ShouldUpdateStatusAndTimestamp()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("ProcessedTest", "{}");
         await store.SaveAsync(message);
 
@@ -176,7 +177,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task IncrementRetryAsync_ShouldUpdateErrorAndRetryCount_KeepPendingStatus()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("RetryTest", "{}");
         await store.SaveAsync(message);
 
@@ -195,7 +196,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task IncrementRetryAsync_ShouldIncrementRetryCount()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("RetryCountTest", "{}");
         await store.SaveAsync(message);
 
@@ -216,7 +217,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task CleanupAsync_ShouldDeleteOldProcessedMessages()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         // Old processed message
         var oldMessage = CreateOutboxMessage("OldProcessed", "{}");
@@ -253,7 +254,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task GetPendingAsync_ShouldOrderByCreatedAt()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         var older = CreateOutboxMessage("OlderEvent", "{}");
         older.CreatedAt = DateTime.UtcNow.AddMinutes(-10);
@@ -285,7 +286,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task FullLifecycle_PendingToProcessingToProcessed()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("LifecycleEvent", "{\"data\":\"test\"}");
         message.CorrelationId = "corr-123";
 
@@ -319,7 +320,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
         var tasks = Enumerable.Range(0, 5).Select(async i =>
         {
             await using var ctx = CreateNewContext();
-            var store = new EfCoreOutboxStore(ctx);
+            var store = new EfCoreOutboxStore<IntegrationTestDbContext>(ctx, new EfCorePersistenceOptions());
             var message = CreateOutboxMessage($"ConcurrentEvent{i}", $"{{\"index\":{i}}}");
             await store.SaveAsync(message);
             return message.Id;
@@ -338,7 +339,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task TryClaimAsync_ShouldClaimPendingMessage()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("ClaimTest", "{}");
         await store.SaveAsync(message);
 
@@ -358,7 +359,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task TryClaimAsync_ShouldRejectAlreadyClaimedMessage()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("ClaimConflictTest", "{}");
         await store.SaveAsync(message);
 
@@ -368,7 +369,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
 
         // Act - second worker tries to claim the same message using a separate context
         await using var ctx2 = CreateNewContext();
-        var store2 = new EfCoreOutboxStore(ctx2);
+        var store2 = new EfCoreOutboxStore<IntegrationTestDbContext>(ctx2, new EfCorePersistenceOptions());
         var secondClaim = await store2.TryClaimAsync(message.Id, "worker-2");
 
         // Assert - second worker should fail to claim
@@ -402,7 +403,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
             {
                 var claimed = new List<Guid>();
                 await using var ctx = CreateNewContext();
-                var store = new EfCoreOutboxStore(ctx);
+                var store = new EfCoreOutboxStore<IntegrationTestDbContext>(ctx, new EfCorePersistenceOptions());
                 foreach (var id in messageIds)
                 {
                     if (await store.TryClaimAsync(id, workerId))
@@ -430,7 +431,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task TryClaimAsync_ShouldNotClaimProcessedMessage()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("AlreadyProcessed", "{}");
         message.Status = OutboxMessageStatus.Processed;
         message.ProcessedAt = DateTime.UtcNow;
@@ -450,7 +451,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
         // Arrange - retried message that should not be claimable since
         // GetPendingAsync won't return it (RetryCount >= MaxRetries),
         // but TryClaimAsync itself only checks Pending status
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("PendingRetryable", "{}");
         message.Status = OutboxMessageStatus.Pending;
         message.RetryCount = 1;
@@ -502,7 +503,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task MoveToDeadLetterAsync_ShouldUpdateStatusToDeadLettered()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("DeadLetterTest", "{\"data\":\"test\"}");
         message.RetryCount = 5;
         message.MaxRetries = 3;
@@ -525,7 +526,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task MoveToDeadLetterAsync_ShouldPreserveOriginalMessageData()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("PreserveDataTest", "{\"orderId\":999}");
         message.RetryCount = 3;
         message.MaxRetries = 3;
@@ -549,7 +550,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task GetPendingAsync_ShouldNotReturnDeadLetteredMessages()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var pendingMessage = CreateOutboxMessage("PendingEvent", "{}");
         await store.SaveAsync(pendingMessage);
 
@@ -574,7 +575,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task MoveToDeadLetterAsync_ShouldBeIdempotent()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("IdempotentDLQ", "{}");
         await store.SaveAsync(message);
 
@@ -593,7 +594,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task DeadLettered_FullLifecycle_PendingToRetriedToDeadLettered()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
         var message = CreateOutboxMessage("DLQLifecycle", "{\"data\":\"lifecycle\"}");
         message.MaxRetries = 2;
         await store.SaveAsync(message);
@@ -618,7 +619,7 @@ public class OutboxStoreIntegrationTests : IAsyncLifetime
     public async Task GetPendingAsync_ShouldRespectMaxRetries_PerMessage()
     {
         // Arrange
-        var store = new EfCoreOutboxStore(_dbContext);
+        var store = new EfCoreOutboxStore<IntegrationTestDbContext>(_dbContext, new EfCorePersistenceOptions());
 
         // Message with MaxRetries = 5 and RetryCount = 3 → should still be pending
         var highRetryMessage = CreateOutboxMessage("HighRetryLimit", "{}");

@@ -5,34 +5,35 @@ using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using TurboMediator.Persistence.Transaction;
 
-namespace TurboMediator.Persistence.EF.Transaction;
+namespace TurboMediator.Persistence.EntityFramework.Transaction;
 
 /// <summary>
 /// EF Core implementation of ITransactionManager.
 /// Wraps DbContext to provide transaction management.
 /// </summary>
-public class EfCoreTransactionManager : ITransactionManager
+/// <typeparam name="TContext">The DbContext type to manage transactions for.</typeparam>
+public class EfCoreTransactionManager<TContext> : ITransactionManager where TContext : DbContext
 {
-    private readonly DbContext _dbContext;
+    private readonly TContext _context;
 
     /// <summary>
     /// Creates a new EfCoreTransactionManager.
     /// </summary>
-    /// <param name="dbContext">The DbContext to manage transactions for.</param>
-    public EfCoreTransactionManager(DbContext dbContext)
+    /// <param name="context">The DbContext to manage transactions for.</param>
+    public EfCoreTransactionManager(TContext context)
     {
-        _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
+        _context = context ?? throw new ArgumentNullException(nameof(context));
     }
 
     /// <inheritdoc />
-    public bool HasActiveTransaction => _dbContext.Database.CurrentTransaction != null;
+    public bool HasActiveTransaction => _context.Database.CurrentTransaction != null;
 
     /// <inheritdoc />
     public async ValueTask<ITransactionScope> BeginTransactionAsync(
         IsolationLevel isolationLevel = IsolationLevel.ReadCommitted,
         CancellationToken cancellationToken = default)
     {
-        var transaction = await _dbContext.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
+        var transaction = await _context.Database.BeginTransactionAsync(isolationLevel, cancellationToken);
         return new EfCoreTransactionScope(transaction);
     }
 
@@ -41,7 +42,7 @@ public class EfCoreTransactionManager : ITransactionManager
         Func<CancellationToken, ValueTask<TResult>> operation,
         CancellationToken cancellationToken = default)
     {
-        var strategy = _dbContext.Database.CreateExecutionStrategy();
+        var strategy = _context.Database.CreateExecutionStrategy();
         return await strategy.ExecuteAsync(
             async ct =>
             {
@@ -54,7 +55,7 @@ public class EfCoreTransactionManager : ITransactionManager
     /// <inheritdoc />
     public async ValueTask SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _context.SaveChangesAsync(cancellationToken);
     }
 }
 

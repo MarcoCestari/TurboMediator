@@ -293,14 +293,14 @@ public class SchedulingIntegrationTests : IAsyncLifetime
     public async Task EfCoreJobStore_BasicOperations_WithInMemoryDb()
     {
         // Arrange
-        var options = new DbContextOptionsBuilder<SchedulingDbContext>()
+        var options = new DbContextOptionsBuilder<SchedulingTestDbContext>()
             .UseInMemoryDatabase($"SchedulingTest_{Guid.NewGuid()}")
             .Options;
 
-        using var context = new SchedulingDbContext(options);
+        using var context = new SchedulingTestDbContext(options);
         await context.Database.EnsureCreatedAsync();
 
-        var store = new EfCoreJobStore(context);
+        var store = new EfCoreJobStore<SchedulingTestDbContext>(context, new EfCoreSchedulingStoreOptions());
 
         // Act - Upsert
         var job = new RecurringJobRecord
@@ -347,14 +347,14 @@ public class SchedulingIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task EfCoreJobStore_TryLock_WorksWithEF()
     {
-        var options = new DbContextOptionsBuilder<SchedulingDbContext>()
+        var options = new DbContextOptionsBuilder<SchedulingTestDbContext>()
             .UseInMemoryDatabase($"SchedulingLockTest_{Guid.NewGuid()}")
             .Options;
 
-        using var context = new SchedulingDbContext(options);
+        using var context = new SchedulingTestDbContext(options);
         await context.Database.EnsureCreatedAsync();
 
-        var store = new EfCoreJobStore(context);
+        var store = new EfCoreJobStore<SchedulingTestDbContext>(context, new EfCoreSchedulingStoreOptions());
 
         var job = new RecurringJobRecord
         {
@@ -383,14 +383,14 @@ public class SchedulingIntegrationTests : IAsyncLifetime
     [Fact]
     public async Task EfCoreJobStore_GetDueJobs_FiltersCorrectly()
     {
-        var options = new DbContextOptionsBuilder<SchedulingDbContext>()
+        var options = new DbContextOptionsBuilder<SchedulingTestDbContext>()
             .UseInMemoryDatabase($"SchedulingDueTest_{Guid.NewGuid()}")
             .Options;
 
-        using var context = new SchedulingDbContext(options);
+        using var context = new SchedulingTestDbContext(options);
         await context.Database.EnsureCreatedAsync();
 
-        var store = new EfCoreJobStore(context);
+        var store = new EfCoreJobStore<SchedulingTestDbContext>(context, new EfCoreSchedulingStoreOptions());
 
         // Due job
         await store.UpsertJobAsync(new RecurringJobRecord
@@ -425,5 +425,20 @@ public class SchedulingIntegrationTests : IAsyncLifetime
         var due = await store.GetDueJobsAsync(DateTimeOffset.UtcNow);
         due.Should().HaveCount(1);
         due[0].JobId.Should().Be("due");
+    }
+}
+
+/// <summary>
+/// Test DbContext for scheduling integration tests.
+/// Replaces the removed SchedulingDbContext with the generic pattern.
+/// </summary>
+public class SchedulingTestDbContext : DbContext
+{
+    public SchedulingTestDbContext(DbContextOptions<SchedulingTestDbContext> options) : base(options) { }
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+        modelBuilder.ApplySchedulingConfiguration();
     }
 }
